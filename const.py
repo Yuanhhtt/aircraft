@@ -1,5 +1,24 @@
 SCREEN_WIDTH = 480
 SCREEN_HEIGHT = 700
+FPS = 60
+
+BULLET_NUM = 10
+BULLET_DELAY = 60
+
+INCREASE_DIFFICULTY_TIME = 10 * 1000
+DOUBLE_BULLET_TIME = 7*60*1000
+
+SMALL_ENEMY_NUM = 10
+SMALL_ENEMY_HP = 1
+
+MID_ENEMY_NUM = 3
+MID_ENEMY_HP = 10
+
+BIG_ENEMY_NUM = 1
+BIG_ENEMY_HP = 50
+
+BIG_ENEMY_NUM = 1
+BIG_ENEMY_HP = 50
 
 IMAGE_PATH = {
     'background' : 'images/background.png',
@@ -15,4 +34,7 @@ IMAGE_PATH = {
     'enemy_big_hit' : 'images/enemy3_hit.png',
     'bullet_red' : 'images/bullet1.png',
     'bullet_blue' : 'images/bullet2.png'
-    }
+}
+FONT_PATH = {
+    'font_1' : 'font/font.ttf'
+}
