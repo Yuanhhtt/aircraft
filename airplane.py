@@ -7,7 +7,7 @@ from bullet import *
 
 #英雄飞机类
 class HeroPlane(pygame.sprite.Sprite):
-    def __init__(self, group: pygame.sprite.Group, postion : tuple, speed = 3) -> None:
+    def __init__(self, group: pygame.sprite.Group, postion : tuple, speed = 6) -> None:
         super().__init__(group)
         self.group = group
         #加载飞行动画
@@ -30,6 +30,7 @@ class HeroPlane(pygame.sprite.Sprite):
         self.image = self.alive_frames[self.frame_num]
         self.rect = self.image.get_rect()
         self.mask = pygame.mask.from_surface(self.image)
+        self.set_mask()
         #设置飞机初始位置
         self.initial_position = postion
         self.rect.midbottom = self.initial_position
@@ -42,22 +43,41 @@ class HeroPlane(pygame.sprite.Sprite):
         #子弹加强
         self.is_powerful = False
         self.is_powerful_level_2 = False
+        self.is_powerful_level_3 = False
         self.left_bullets = []
         self.right_bullets = []
         self.left_mid_bullets = []
         self.right_mid_bullets = []
+        self.left_level3_bullets = []
+        self.right_level3_bullets = []
         #加载子弹声音
         self.bullet_sound = pygame.mixer.Sound("sound/bullet.wav")
         self.bullet_sound.set_volume(0.2)
         self.destroy_sound = pygame.mixer.Sound("sound/me_down.wav")
         self.destroy_sound.set_volume(0.2)
     
+    def set_mask(self) -> None:
+        for x in range(20):
+            for y in range(self.rect.height):
+                self.mask.set_at((x, y), 0)
+        for x in range(self.rect.width - 20, self.rect.width):
+            for y in range(self.rect.height):
+                self.mask.set_at((x, y), 0)
+        for x in range(20, self.rect.width - 20):
+            for y in range(self.rect.height - 20, self.rect.height):
+                self.mask.set_at((x, y), 0)
+        for x in range(20, self.rect.width - 20):
+            for y in range(0, 10):
+                self.mask.set_at((x, y), 0)
+    
     def restart(self) -> None:
         self.is_alive = True
         self.is_powerful = False
         self.is_powerful_level_2 = False
+        self.is_powerful_level_3 = False
         self.frame_num = 0
         self.mask = pygame.mask.from_surface(self.alive_frames[0])
+        self.set_mask()
         self.rect.midbottom = self.initial_position
         self.add(self.group)
         self.last_update_time = pygame.time.get_ticks()
@@ -72,6 +92,11 @@ class HeroPlane(pygame.sprite.Sprite):
         self.left_mid_bullets = [Bullet(self.bullet_group) for i in range(BULLET_NUM)]
         self.right_mid_bullets = [Bullet(self.bullet_group) for i in range(BULLET_NUM)]
     
+    def powerful_level_3(self) -> None:
+        self.is_powerful_level_3 = True
+        self.left_level3_bullets = [BlueBullet(self.bullet_group) for i in range(BULLET_NUM)]
+        self.right_level3_bullets = [BlueBullet(self.bullet_group) for i in range(BULLET_NUM)]
+    
     def firing(self) -> None:
         for b in self.bullets:
             if not b.alive():
@@ -84,16 +109,25 @@ class HeroPlane(pygame.sprite.Sprite):
                     break
             for b in self.right_bullets:
                 if not b.alive():
-                    b.reset((self.rect.centerx + 30,self.rect.centery))
+                    b.reset((self.rect.centerx + 32,self.rect.centery))
                     break
         if self.is_powerful_level_2:
             for b in self.left_mid_bullets:
                 if not b.alive():
-                    b.reset((self.rect.centerx - 16,self.rect.centery-8))
+                    b.reset((self.rect.centerx - 17,self.rect.centery - 10))
                     break
             for b in self.right_mid_bullets:
                 if not b.alive():
-                    b.reset((self.rect.centerx + 15,self.rect.centery-8))
+                    b.reset((self.rect.centerx + 17,self.rect.centery - 10))
+                    break
+        if self.is_powerful_level_3:
+            for b in self.left_level3_bullets:
+                if not b.alive():
+                    b.reset((self.rect.centerx - 48,self.rect.centery + 30))
+                    break
+            for b in self.right_level3_bullets:
+                if not b.alive():
+                    b.reset((self.rect.centerx + 47,self.rect.centery + 30))
                     break
         self.bullet_sound.play()
         self.last_firing_time = pygame.time.get_ticks()
@@ -164,7 +198,7 @@ class HeroPlane(pygame.sprite.Sprite):
 #小号敌机类
 class SmallEnemyPlane(pygame.sprite.Sprite):
     def __init__(
-        self, group: pygame.sprite.Group, alive_frames, destroy_frames, destroy_sound, speed = 3, hp = SMALL_ENEMY_HP
+        self, group: pygame.sprite.Group, alive_frames, destroy_frames, destroy_sound, speed = 5, hp = SMALL_ENEMY_HP
     ) -> None:
         super().__init__(group)
         self.group = group
@@ -195,11 +229,11 @@ class SmallEnemyPlane(pygame.sprite.Sprite):
     def restart(self) -> None:
         self.reset()
     
-    def be_hit(self) -> None:
-        if self.hp == 0:
+    def be_hit(self, damage=1) -> None:
+        if self.hp <= 0:
             self.destroy()
         else:
-            self.hp -= 1
+            self.hp -= damage
 
     def destroy(self) -> None:
         self.is_alive = False
@@ -250,7 +284,7 @@ class SmallEnemyPlane(pygame.sprite.Sprite):
 
 #中号敌机类
 class MidEnemyPlane(pygame.sprite.Sprite):
-    def __init__(self, group: pygame.sprite.Group, destroy_sound, speed = 2, hp_max = MID_ENEMY_HP) -> None:
+    def __init__(self, group: pygame.sprite.Group, destroy_sound, speed = 3, hp_max = MID_ENEMY_HP) -> None:
         super().__init__(group)
         self.group = group
         self.destroy_sound = destroy_sound
@@ -313,12 +347,12 @@ class MidEnemyPlane(pygame.sprite.Sprite):
         point_c = (point_a[0] + int(line_width*remain), self.rect.bottom - line_height)
         pygame.draw.line(screen, line_color, point_a, point_c, line_height)
         
-    def be_hit(self) -> None:
+    def be_hit(self, damage=1) -> None:
         self.hit = True
-        if self.hp == 0:
+        if self.hp <= 0:
             self.destroy()
         else:
-            self.hp -= 1
+            self.hp -= damage
     
     def destroy(self) -> None:
         self.is_alive = False
@@ -380,7 +414,7 @@ class MidEnemyPlane(pygame.sprite.Sprite):
 
 #大号敌机类
 class BigEnemyPlane(pygame.sprite.Sprite):
-    def __init__(self, group: pygame.sprite.Group, destroy_sound, speed = 1, hp_max = BIG_ENEMY_HP) -> None:
+    def __init__(self, group: pygame.sprite.Group, destroy_sound, speed = 2, hp_max = BIG_ENEMY_HP) -> None:
         super().__init__(group)
         self.group = group
         self.destroy_sound = destroy_sound
@@ -442,20 +476,21 @@ class BigEnemyPlane(pygame.sprite.Sprite):
         point_c = (point_a[0] + int(line_width*remain), self.rect.bottom - line_height)
         pygame.draw.line(screen, line_color, point_a, point_c, line_height)
         
-    def be_hit(self) -> None:
+    def be_hit(self, damage=1) -> None:
         self.hit = True
-        if self.hp == 0:
+        if self.hp <= 0:
             self.destroy()
         else:
-            self.hp -= 1
+            self.hp -= damage
     
     def destroy(self) -> None:
-        self.is_alive = False
-        self.frame_num = 0
-        self.hp = self.hp_max
-        self.mask.clear()
-        self.destroy_sound.play()
-        self.last_update_time = pygame.time.get_ticks()
+        if self.is_alive:
+            self.is_alive = False
+            self.frame_num = 0
+            self.hp = self.hp_max
+            self.mask.clear()
+            self.destroy_sound.play()
+            self.last_update_time = pygame.time.get_ticks()
 
     def set_random_xy(self):
         #随机设置敌机位置
@@ -506,4 +541,75 @@ class BigEnemyPlane(pygame.sprite.Sprite):
             else:
                 self.kill()
                 self.reset()
-            
+
+#子弹补给
+class BulletSupply(pygame.sprite.Sprite):
+    def __init__(self, group: pygame.sprite.Group, speed = 4) -> None:
+        super().__init__()
+        self.group = group
+        self.image = pygame.image.load('images/bullet_supply.png').convert_alpha()
+        self.rect = self.image.get_rect()
+        self.mask = pygame.mask.from_surface(self.image)
+        self.speed = speed
+        #获得音效
+        self.get_bullet_sound = pygame.mixer.Sound("sound/get_bullet.wav")
+        self.get_bullet_sound.set_volume(0.2)
+    
+    def start(self) -> None:
+        self.rect.x = random.randint(0, SCREEN_WIDTH - self.rect.width)
+        self.rect.y = -100
+        self.add(self.group)
+    
+    def get_supply(self) ->None:
+        self.get_bullet_sound.play()
+        self.kill()
+    
+    def update(self) -> None:
+        if self.alive():
+            if self.rect.y < SCREEN_HEIGHT:
+                self.rect.y += self.speed
+            else:
+                self.kill()
+
+#核弹补给
+class BombSupply(pygame.sprite.Sprite):
+    def __init__(self, group: pygame.sprite.Group, speed = 4) -> None:
+        super().__init__()
+        self.group = group
+        self.image = pygame.image.load('images/bomb_supply.png').convert_alpha()
+        self.rect = self.image.get_rect()
+        self.mask = pygame.mask.from_surface(self.image)
+        self.speed = speed
+        #获得音效
+        self.get_bullet_sound = pygame.mixer.Sound("sound/get_bomb.wav")
+        self.get_bullet_sound.set_volume(0.2)
+        self.use_bullet_sound = pygame.mixer.Sound("sound/use_bomb.wav")
+        self.use_bullet_sound.set_volume(0.2)
+        self.bomb_num = 0
+    
+    def start(self) -> None:
+        self.rect.x = random.randint(0, SCREEN_WIDTH - self.rect.width)
+        self.rect.y = -100
+        self.add(self.group)
+    
+    def get_supply(self) ->None:
+        if self.bomb_num < 100:
+            self.bomb_num += 1
+        self.get_bullet_sound.play()
+        self.kill()
+    
+    def use_bomb(self, score_ui) -> None:
+        if self.bomb_num > 0:
+            self.use_bullet_sound.play()
+            self.bomb_num -= 1
+            for s in self.group:
+                if type(s) == BigEnemyPlane or type(s) == MidEnemyPlane or type(s) == SmallEnemyPlane:
+                    s.destroy()
+                    score_ui.add_score(s.hp_max)
+    
+    def update(self) -> None:
+        if self.alive():
+            if self.rect.y < SCREEN_HEIGHT:
+                self.rect.y += self.speed
+            else:
+                self.kill()

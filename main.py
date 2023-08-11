@@ -4,34 +4,17 @@ from const import *
 from airplane import *
 from gui import *
 
-class Game():
-    def __init__(self) -> None:
-        pygame.init()
-        self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-        pygame.display.set_caption('看谁打得久')
-        self.screen_rect = self.screen.get_rect()
-        #加载背景图片
-        self.background = pygame.image.load(IMAGE_PATH['background'])
-        
-    
-    def start(self):
-        running = True
-        while running:
-            for event in pygame.event.get():
-                #处理关闭事件
-                if event.type == pygame.QUIT:
-                    running = False
-                    self.quit()
-            self.screen.blit(self.background,(0,0))
-            pygame.display.update()
-
-            
-    def stop(self):
-        pass
-
-    def quit(self):
-        pygame.quit()
-        sys.exit()
+def bullet_supply_col(player : HeroPlane, bullet_supply : BulletSupply):
+    bullet_supply.get_supply()
+    if player.is_powerful == False:
+        player.powerful()
+        return
+    if player.is_powerful_level_2 == False:
+        player.powerful_level_2()
+        return
+    if player.is_powerful_level_3 == False:
+        player.powerful_level_3()
+        return
 
 def main():
     pygame.init()
@@ -55,8 +38,6 @@ def main():
     big_enemy_destroy_sound.set_volume(0.2)
     big_enemy_flying_sound = pygame.mixer.Sound("sound/enemy3_flying.wav")
     big_enemy_flying_sound.set_volume(0.2)
-    get_bullet_sound = pygame.mixer.Sound("sound/get_bullet.wav")
-    get_bullet_sound.set_volume(0.2)
     upgrade_sound = pygame.mixer.Sound("sound/upgrade.wav")
     upgrade_sound.set_volume(0.2)
     
@@ -67,10 +48,10 @@ def main():
     small_destroy_frames = [pygame.image.load(i).convert_alpha() for i in IMAGE_PATH['enemy_small_destroy']]
 
     #创建Sprite组对象
-    all_visible_group = pygame.sprite.Group()
-    player_group = pygame.sprite.Group()
-    enemy_group = pygame.sprite.Group()
-    gui_group = pygame.sprite.Group()
+    all_visible_group = pygame.sprite.OrderedUpdates()
+    player_group = pygame.sprite.OrderedUpdates()
+    enemy_group = pygame.sprite.OrderedUpdates()
+    gui_group = pygame.sprite.OrderedUpdates()
 
     #创建Sprite对象
     ##生成player
@@ -83,6 +64,15 @@ def main():
     mid_enemy_list = [MidEnemyPlane(enemy_group, mid_enemy_destroy_sound) for i in range(MID_ENEMY_NUM)]
     ##生成大型敌机
     big_enemy_list = [BigEnemyPlane(enemy_group, big_enemy_destroy_sound) for i in range(BIG_ENEMY_NUM)]
+    ##生成子弹补给
+    bullet_supply = BulletSupply(all_visible_group)
+    ##生成核弹补给
+    bomb_supply = BombSupply(all_visible_group)
+    #初始化核弹UI
+    bomb_image=pygame.image.load('images/bomb.png').convert_alpha()
+    bomb_rect=bomb_image.get_rect()
+    bomb_font=pygame.font.Font('font/font.ttf',48)
+   
 
     pygame.mouse.set_visible(False)
     pygame.event.set_grab(True)
@@ -95,6 +85,8 @@ def main():
     RESTART_GAME = pygame.USEREVENT + 2
     FIVE_BULLET = pygame.USEREVENT + 3
     pygame.time.set_timer(FIVE_BULLET, FIVE_BULLET_TIME)
+    SEVEN_BULLET = pygame.USEREVENT + 4
+    pygame.time.set_timer(SEVEN_BULLET, SEVEN_BULLET_TIME)
 
     pygame.key.stop_text_input()
     #定义游戏状态
@@ -117,9 +109,6 @@ def main():
         
         #获取事件
         for event in pygame.event.get():
-            # print(event.type)
-            # print(event.__dict__)
-            # print(event.__str__())
             #处理关闭事件
             if event.type == pygame.QUIT:
                 running = False
@@ -127,28 +116,34 @@ def main():
                 break
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
-                # print(event.pos)
+                    #按ESC键退出游戏
                     pygame.event.post(pygame.event.Event(pygame.QUIT))
+                if event.key == pygame.K_SPACE:
+                    #按空格SPACE键使用核弹清屏
+                    bomb_supply.use_bomb(score_ui)
             elif event.type == INCREASE_DIFFICULTY:
                 #每xx秒提升难度，中、大敌机血量加1
                 if game_going:
                     for e in mid_enemy_list:
-                        e.increase_difficulty(2)
+                        e.increase_difficulty(int(e.hp_max*0.1))
                     for e in big_enemy_list:
-                        e.increase_difficulty(6)
-                    upgrade_sound.play()
+                        e.increase_difficulty(int(e.hp_max*0.1))
+                    # upgrade_sound.play()
                     # prompt_ui.show("increase difficulty!")
                 # print(int(clock.get_fps()))
             elif event.type == DOUBLE_BULLET:
                 #获得子弹强化
-                player.powerful()
+                upgrade_sound.play()
+                bullet_supply.start()
                 pygame.time.set_timer(DOUBLE_BULLET, 0)
-                get_bullet_sound.play()
-                prompt_ui.show("Fire Powerful!", color=(0, 0, 255))
             elif event.type == FIVE_BULLET:
-                player.powerful_level_2()
+                upgrade_sound.play()
+                bullet_supply.start()
                 pygame.time.set_timer(FIVE_BULLET, 0)
-                prompt_ui.show("Fire Powerful!!!", color=(0, 0, 255))
+            elif event.type == SEVEN_BULLET:
+                upgrade_sound.play()
+                bullet_supply.start()
+                pygame.time.set_timer(SEVEN_BULLET, 0)
             elif event.type == RESTART_GAME:
                 #重新开始游戏
                 game_going = not game_going
@@ -167,8 +162,14 @@ def main():
                 pygame.time.set_timer(INCREASE_DIFFICULTY, INCREASE_DIFFICULTY_TIME)
                 pygame.time.set_timer(DOUBLE_BULLET, DOUBLE_BULLET_TIME)
                 pygame.time.set_timer(FIVE_BULLET, FIVE_BULLET_TIME)
+                pygame.time.set_timer(SEVEN_BULLET, SEVEN_BULLET_TIME)
                 #5.重置score_ui
                 score_ui.restart()
+                #6.核弹清零
+                bomb_supply.bomb_num = 0
+                bomb_supply.kill()
+                #7.重置补给
+                bullet_supply.kill()
         
         #判断游戏进行状态
         if not game_going:
@@ -179,6 +180,8 @@ def main():
         player_group.update()
         enemy_group.update()
         gui_group.update()
+        bullet_supply.update()
+        bomb_supply.update()
         
         
         for p in player_group.sprites():
@@ -202,15 +205,41 @@ def main():
                     #计算分数
                     if not e.is_alive:
                         score_ui.add_score(e.hp_max)
+                        #击毁大型敌机，获得核弹*1
+                        if type(e) is BigEnemyPlane:
+                            upgrade_sound.play()
+                            bomb_supply.start()
+            #子弹补给碰撞检测
+            if bullet_supply.alive():
+                if pygame.sprite.collide_mask(p, bullet_supply):
+                    bullet_supply_col(p, bullet_supply)
+            #核弹补给碰撞检测
+            if bomb_supply.alive():
+                if pygame.sprite.collide_mask(p, bomb_supply):
+                    bomb_supply.get_supply()
         
         #绘制图像
+        #先画大型敌机
+        for e in big_enemy_list:
+            if e.alive():
+                if e.rect.bottom > 0:
+                    e.add(all_visible_group)
+        for e in mid_enemy_list:
+            if e.alive():
+                if e.rect.bottom > 0:
+                    e.add(all_visible_group)
+        for e in small_enemy_list:
+            if e.alive():
+                if e.rect.bottom > 0:
+                    e.add(all_visible_group)
         all_visible_group.add(player_group, player.bullet_group)
-        for enemy in enemy_group.sprites():
-            if enemy.rect.bottom > 0:
-                all_visible_group.add(enemy)
-        
         all_visible_group.draw(screen)
         gui_group.draw(screen)
+        #绘制全屏炸弹数量
+        bomb_text=bomb_font.render('× %d' % (bomb_supply.bomb_num),True, (255, 255, 255))
+        text_rect=bomb_text.get_rect()
+        screen.blit(bomb_image,(10,SCREEN_HEIGHT-10-bomb_rect.height))
+        screen.blit(bomb_text,(20+bomb_rect.width,SCREEN_HEIGHT-5-text_rect.height))
         pygame.display.update()
         clock.tick(FPS)
     pygame.quit()
