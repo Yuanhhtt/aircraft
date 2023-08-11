@@ -9,13 +9,10 @@ class Bullet(pygame.sprite.Sprite):
         self.mask = pygame.mask.from_surface(self.image)
         self.rect = self.image.get_rect()
         self.speed = speed
-        self.bullet_sound = pygame.mixer.Sound("sound/bullet.wav")
-        self.bullet_sound.set_volume(0.2)
     
     def reset(self, postion) -> None:
         self.rect.center = postion
         self.add(self.group)
-        self.bullet_sound.play()
     
     def update(self) -> None:
         if self.alive():

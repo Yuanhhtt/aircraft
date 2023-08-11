@@ -42,8 +42,29 @@ def main():
     pygame.display.set_caption('看谁打得久')
     screen_rect = screen.get_rect()
 
-    #加载背景图片
+    #加载声音资源
+    pygame.mixer.music.load("sound/game_music.ogg")
+    pygame.mixer.music.set_volume(0.2)
+    pygame.mixer.music.play(-1)
+
+    small_enemy_destroy_sound = pygame.mixer.Sound("sound/enemy1_down.wav")
+    small_enemy_destroy_sound.set_volume(0.2)
+    mid_enemy_destroy_sound = pygame.mixer.Sound("sound/enemy2_down.wav")
+    mid_enemy_destroy_sound.set_volume(0.2)
+    big_enemy_destroy_sound = pygame.mixer.Sound("sound/enemy3_down.wav")
+    big_enemy_destroy_sound.set_volume(0.2)
+    big_enemy_flying_sound = pygame.mixer.Sound("sound/enemy3_flying.wav")
+    big_enemy_flying_sound.set_volume(0.2)
+    get_bullet_sound = pygame.mixer.Sound("sound/get_bullet.wav")
+    get_bullet_sound.set_volume(0.2)
+    upgrade_sound = pygame.mixer.Sound("sound/upgrade.wav")
+    upgrade_sound.set_volume(0.2)
+    
+
+    #加载图片
     background=pygame.image.load(IMAGE_PATH['background'])
+    small_alive_frames = [pygame.image.load(i).convert_alpha() for i in IMAGE_PATH['enemy_small']]
+    small_destroy_frames = [pygame.image.load(i).convert_alpha() for i in IMAGE_PATH['enemy_small_destroy']]
 
     #创建Sprite组对象
     all_visible_group = pygame.sprite.Group()
@@ -55,19 +76,13 @@ def main():
     ##生成player
     player = HeroPlane(player_group, screen_rect.midbottom)
     ##生成小型敌机
-    small_enemy_list = [SmallEnemyPlane(enemy_group) for i in range(SMALL_ENEMY_NUM)]
+    small_enemy_list = [
+        SmallEnemyPlane(enemy_group, small_alive_frames, small_destroy_frames, small_enemy_destroy_sound) for i in range(SMALL_ENEMY_NUM)
+    ]
     ##生成中型敌机
-    mid_enemy_list = [MidEnemyPlane(enemy_group) for i in range(MID_ENEMY_NUM)]
+    mid_enemy_list = [MidEnemyPlane(enemy_group, mid_enemy_destroy_sound) for i in range(MID_ENEMY_NUM)]
     ##生成大型敌机
-    big_enemy_list = [BigEnemyPlane(enemy_group) for i in range(BIG_ENEMY_NUM)]
-
-    #加载声音资源
-    pygame.mixer.music.load("sound/game_music.ogg")
-    pygame.mixer.music.set_volume(0.2)
-    pygame.mixer.music.play(-1)
-    
-
-    
+    big_enemy_list = [BigEnemyPlane(enemy_group, big_enemy_destroy_sound) for i in range(BIG_ENEMY_NUM)]
 
     pygame.mouse.set_visible(False)
     pygame.event.set_grab(True)
@@ -78,7 +93,10 @@ def main():
     DOUBLE_BULLET = pygame.USEREVENT + 1
     pygame.time.set_timer(DOUBLE_BULLET, DOUBLE_BULLET_TIME)
     RESTART_GAME = pygame.USEREVENT + 2
+    FIVE_BULLET = pygame.USEREVENT + 3
+    pygame.time.set_timer(FIVE_BULLET, FIVE_BULLET_TIME)
 
+    pygame.key.stop_text_input()
     #定义游戏状态
     running = True
     game_going = True
@@ -86,6 +104,7 @@ def main():
     #初始化游戏提示UI
     prompt_ui = GamePrompt(gui_group)
     gameover_ui = GameOverUI(gui_group)
+    score_ui = GameScore(gui_group)
 
     #初始化时间
     clock = pygame.time.Clock()
@@ -100,6 +119,7 @@ def main():
         for event in pygame.event.get():
             # print(event.type)
             # print(event.__dict__)
+            # print(event.__str__())
             #处理关闭事件
             if event.type == pygame.QUIT:
                 running = False
@@ -113,16 +133,22 @@ def main():
                 #每xx秒提升难度，中、大敌机血量加1
                 if game_going:
                     for e in mid_enemy_list:
-                        e.increase_difficulty(1)
+                        e.increase_difficulty(2)
                     for e in big_enemy_list:
-                        e.increase_difficulty(5)
-                    prompt_ui.show("increase difficulty!")
+                        e.increase_difficulty(6)
+                    upgrade_sound.play()
+                    # prompt_ui.show("increase difficulty!")
                 # print(int(clock.get_fps()))
             elif event.type == DOUBLE_BULLET:
                 #获得子弹强化
                 player.powerful()
                 pygame.time.set_timer(DOUBLE_BULLET, 0)
+                get_bullet_sound.play()
                 prompt_ui.show("Fire Powerful!", color=(0, 0, 255))
+            elif event.type == FIVE_BULLET:
+                player.powerful_level_2()
+                pygame.time.set_timer(FIVE_BULLET, 0)
+                prompt_ui.show("Fire Powerful!!!", color=(0, 0, 255))
             elif event.type == RESTART_GAME:
                 #重新开始游戏
                 game_going = not game_going
@@ -140,6 +166,9 @@ def main():
                 #4.重置定时器
                 pygame.time.set_timer(INCREASE_DIFFICULTY, INCREASE_DIFFICULTY_TIME)
                 pygame.time.set_timer(DOUBLE_BULLET, DOUBLE_BULLET_TIME)
+                pygame.time.set_timer(FIVE_BULLET, FIVE_BULLET_TIME)
+                #5.重置score_ui
+                score_ui.restart()
         
         #判断游戏进行状态
         if not game_going:
@@ -167,15 +196,18 @@ def main():
             for b in collided_dict.keys():
                 for e in collided_dict[b]:
                     e.be_hit()
+                    #被攻击时绘制血条
                     if not type(e) is SmallEnemyPlane:
                         e.draw_hp_line(screen)
+                    #计算分数
+                    if not e.is_alive:
+                        score_ui.add_score(e.hp_max)
         
         #绘制图像
         all_visible_group.add(player_group, player.bullet_group)
         for enemy in enemy_group.sprites():
             if enemy.rect.bottom > 0:
                 all_visible_group.add(enemy)
-
         
         all_visible_group.draw(screen)
         gui_group.draw(screen)

@@ -1,3 +1,5 @@
+from time import sleep
+from tkinter.messagebox import NO
 import pygame
 import random
 from const import *
@@ -5,7 +7,7 @@ from bullet import *
 
 #英雄飞机类
 class HeroPlane(pygame.sprite.Sprite):
-    def __init__(self, group: pygame.sprite.Group, postion : tuple, speed = 6) -> None:
+    def __init__(self, group: pygame.sprite.Group, postion : tuple, speed = 3) -> None:
         super().__init__(group)
         self.group = group
         #加载飞行动画
@@ -39,12 +41,21 @@ class HeroPlane(pygame.sprite.Sprite):
         self.last_firing_time = pygame.time.get_ticks()
         #子弹加强
         self.is_powerful = False
+        self.is_powerful_level_2 = False
         self.left_bullets = []
         self.right_bullets = []
+        self.left_mid_bullets = []
+        self.right_mid_bullets = []
+        #加载子弹声音
+        self.bullet_sound = pygame.mixer.Sound("sound/bullet.wav")
+        self.bullet_sound.set_volume(0.2)
+        self.destroy_sound = pygame.mixer.Sound("sound/me_down.wav")
+        self.destroy_sound.set_volume(0.2)
     
     def restart(self) -> None:
         self.is_alive = True
         self.is_powerful = False
+        self.is_powerful_level_2 = False
         self.frame_num = 0
         self.mask = pygame.mask.from_surface(self.alive_frames[0])
         self.rect.midbottom = self.initial_position
@@ -55,6 +66,11 @@ class HeroPlane(pygame.sprite.Sprite):
         self.is_powerful = True
         self.left_bullets = [BlueBullet(self.bullet_group) for i in range(BULLET_NUM)]
         self.right_bullets = [BlueBullet(self.bullet_group) for i in range(BULLET_NUM)]
+    
+    def powerful_level_2(self) -> None:
+        self.is_powerful_level_2 = True
+        self.left_mid_bullets = [Bullet(self.bullet_group) for i in range(BULLET_NUM)]
+        self.right_mid_bullets = [Bullet(self.bullet_group) for i in range(BULLET_NUM)]
     
     def firing(self) -> None:
         for b in self.bullets:
@@ -70,6 +86,16 @@ class HeroPlane(pygame.sprite.Sprite):
                 if not b.alive():
                     b.reset((self.rect.centerx + 30,self.rect.centery))
                     break
+        if self.is_powerful_level_2:
+            for b in self.left_mid_bullets:
+                if not b.alive():
+                    b.reset((self.rect.centerx - 16,self.rect.centery-8))
+                    break
+            for b in self.right_mid_bullets:
+                if not b.alive():
+                    b.reset((self.rect.centerx + 15,self.rect.centery-8))
+                    break
+        self.bullet_sound.play()
         self.last_firing_time = pygame.time.get_ticks()
     
     def destroy(self) -> None:
@@ -78,41 +104,35 @@ class HeroPlane(pygame.sprite.Sprite):
         self.mask.clear()
         for b in self.bullet_group.sprites():
             b.kill()
+        self.destroy_sound.play()
         self.last_update_time = pygame.time.get_ticks()
     
     def input(self) ->None:
-        mouse_rel = pygame.mouse.get_rel()
-        # x , y = 0, 0
-        # if mouse_rel[0] >= 0:
-        #     #鼠标x轴向左
-        #     if mouse_rel[0] > self.speed:
-        #         x = self.rect.midbottom[0] + self.speed
-        #     else:
-        #         x = self.rect.midbottom[0] + mouse_rel[0]
-        # else:
-        #     #鼠标x轴向右
-        #     if mouse_rel[0] < -self.speed:
-        #         x = self.rect.midbottom[0] - self.speed
-        #     else:
-        #         x = self.rect.midbottom[0] + mouse_rel[0]
+        dis = pygame.math.Vector2(pygame.mouse.get_rel())
+        dis_len = dis.length()
+        if dis_len > self.speed:
+            dis.normalize_ip()
+            dis = dis*self.speed
 
-        # if mouse_rel[1] >= 0:
-        #     #鼠标y轴向下
-        #     if mouse_rel[1] > self.speed:
-        #         y = self.rect.midbottom[1] + self.speed
-        #     else:
-        #         y = self.rect.midbottom[1] + mouse_rel[1]
-        # else:
-        #     #鼠标y轴向上
-        #     if mouse_rel[1] < -self.speed:
-        #         y = self.rect.midbottom[1] - self.speed
-        #     else:
-        #         y = self.rect.midbottom[1] + mouse_rel[1]
-        x = self.rect.midbottom[0] + mouse_rel[0]
-        y = self.rect.midbottom[1] + mouse_rel[1]
+        x = self.rect.center[0] + dis[0]
+        y = self.rect.center[1] + dis[1]
+        if y > SCREEN_HEIGHT:
+            self.rect.centery = SCREEN_HEIGHT
+        elif y < 0:
+            self.rect.centery = 0
+        else:
+            self.rect.centery = y
         
-        if 0 <= x <= SCREEN_WIDTH and self.rect.height <= y <= SCREEN_HEIGHT:
-            self.rect.midbottom = (x, y)
+        if x > SCREEN_WIDTH:
+            self.rect.centerx = SCREEN_WIDTH
+        elif x < 0:
+            self.rect.centerx = 0
+        else:
+            self.rect.centerx = x
+
+        # if 0 <= x <= SCREEN_WIDTH and self.rect.height <= y <= SCREEN_HEIGHT:
+        #     self.rect.center = (x, y)
+        self.rect.center += dis
     
     def update(self) -> None:
         #根据ticks计算frame_num
@@ -143,22 +163,22 @@ class HeroPlane(pygame.sprite.Sprite):
 
 #小号敌机类
 class SmallEnemyPlane(pygame.sprite.Sprite):
-    def __init__(self, group: pygame.sprite.Group, speed = 3) -> None:
+    def __init__(
+        self, group: pygame.sprite.Group, alive_frames, destroy_frames, destroy_sound, speed = 3, hp = SMALL_ENEMY_HP
+    ) -> None:
         super().__init__(group)
         self.group = group
+        self.destroy_sound = destroy_sound
         #加载飞行动画
-        self.alive_frames = []
-        for i in IMAGE_PATH['enemy_small']:
-            self.alive_frames.append(pygame.image.load(i).convert_alpha())
+        self.alive_frames = alive_frames
         #加载炸毁时动画
-        self.destroy_frames = []
-        for i in IMAGE_PATH['enemy_small_destroy']:
-            self.destroy_frames.append(pygame.image.load(i).convert_alpha())
+        self.destroy_frames = destroy_frames
         #动画帧索引
         self.frame_num = 0
         #飞机速度
         self.speed = speed
-        self.hp = SMALL_ENEMY_HP
+        self.hp_max = hp
+        self.hp = hp
         #上一帧的更新时间
         self.last_update_time = pygame.time.get_ticks()
         self.frame_rate = FPS
@@ -186,6 +206,7 @@ class SmallEnemyPlane(pygame.sprite.Sprite):
         self.frame_num = 0
         self.hp = SMALL_ENEMY_HP
         self.mask.clear()
+        self.destroy_sound.play()
         self.last_update_time = pygame.time.get_ticks()
 
     def set_random_xy(self):
@@ -229,9 +250,10 @@ class SmallEnemyPlane(pygame.sprite.Sprite):
 
 #中号敌机类
 class MidEnemyPlane(pygame.sprite.Sprite):
-    def __init__(self, group: pygame.sprite.Group, speed = 2, hp_max = MID_ENEMY_HP) -> None:
+    def __init__(self, group: pygame.sprite.Group, destroy_sound, speed = 2, hp_max = MID_ENEMY_HP) -> None:
         super().__init__(group)
         self.group = group
+        self.destroy_sound = destroy_sound
         #加载飞行动画
         self.alive_frames = []
         for i in IMAGE_PATH['enemy_mid']:
@@ -303,6 +325,7 @@ class MidEnemyPlane(pygame.sprite.Sprite):
         self.frame_num = 0
         self.hp = self.hp_max
         self.mask.clear()
+        self.destroy_sound.play()
         self.last_update_time = pygame.time.get_ticks()
 
     def set_random_xy(self):
@@ -357,9 +380,10 @@ class MidEnemyPlane(pygame.sprite.Sprite):
 
 #大号敌机类
 class BigEnemyPlane(pygame.sprite.Sprite):
-    def __init__(self, group: pygame.sprite.Group, speed = 1, hp_max = BIG_ENEMY_HP) -> None:
+    def __init__(self, group: pygame.sprite.Group, destroy_sound, speed = 1, hp_max = BIG_ENEMY_HP) -> None:
         super().__init__(group)
         self.group = group
+        self.destroy_sound = destroy_sound
         #加载飞行动画
         self.alive_frames = []
         for i in IMAGE_PATH['enemy_big']:
@@ -391,7 +415,7 @@ class BigEnemyPlane(pygame.sprite.Sprite):
         self.set_random_xy()
         #飞机加入组
         self.add(self.group)
-    
+
     def restart(self) -> None:
         self.reset()
         self.hp_max = BIG_ENEMY_HP
@@ -430,6 +454,7 @@ class BigEnemyPlane(pygame.sprite.Sprite):
         self.frame_num = 0
         self.hp = self.hp_max
         self.mask.clear()
+        self.destroy_sound.play()
         self.last_update_time = pygame.time.get_ticks()
 
     def set_random_xy(self):

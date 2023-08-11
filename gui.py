@@ -32,6 +32,27 @@ class GameTimer(pygame.sprite.Sprite):
         hours = ticks // 3600000
         self.image = self.font.render("%02d:%02d:%02d.%02d" % (hours, minutes,seconds, ticks % 100), True, (255, 255, 255))
 
+#游戏得分
+class GameScore(pygame.sprite.Sprite):
+    def __init__(self,  group: pygame.sprite.Group) -> None:
+        super().__init__(group)
+        self.score = 0
+        self.font = pygame.font.SysFont(None, 30)
+        self.image = self.font.render("score:%d" % (self.score), True, (255, 255, 255))
+        self.rect = self.image.get_rect()
+        self.rect.midtop = (SCREEN_WIDTH / 2, 0)
+    
+    def add_score(self, score:int):
+        self.score += score
+    
+    def restart(self):
+        self.score = 0
+    
+    def update(self) -> None:
+        self.image = self.font.render("score:%d" % (self.score), True, (255, 255, 255))
+        self.rect = self.image.get_rect()
+        self.rect.midtop = (SCREEN_WIDTH / 2, 0)
+
 #游戏帧率
 class GameFps(pygame.sprite.Sprite):
     def __init__(self,  group: pygame.sprite.Group, clock : pygame.time.Clock) -> None:
@@ -51,7 +72,7 @@ class GamePrompt(pygame.sprite.Sprite):
         super().__init__()
         self.group = group
         self.text = ""
-        self.font = pygame.font.SysFont(FONT_PATH['font_1'], 30)
+        self.font = pygame.font.SysFont(None, 30)
         self.image = self.font.render(self.text, True, (255, 255, 255))
         self.rect = self.image.get_rect()
         self.last_show_ticks = 0
@@ -60,7 +81,7 @@ class GamePrompt(pygame.sprite.Sprite):
         self.text = text
         self.image = self.font.render(self.text, True, color)
         self.rect = self.image.get_rect()
-        self.rect.midtop = (SCREEN_WIDTH / 2, 0)
+        self.rect.midtop = (SCREEN_WIDTH / 2, 20)
         self.add(self.group)
         self.last_show_ticks = pygame.time.get_ticks()
     
@@ -93,7 +114,7 @@ class GameOverUI(pygame.sprite.Sprite):
         self.image.blit(self.text_restart, (20, 80))
         self.image.blit(self.text_exit, (20, 140))
         key_pressed = pygame.key.get_pressed()
-        if key_pressed[pygame.K_r] :
+        if key_pressed[pygame.K_r]:
             pygame.event.post(pygame.event.Event(pygame.USEREVENT + 2))
             self.kill()
         
