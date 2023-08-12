@@ -83,6 +83,7 @@ class HeroPlane(pygame.sprite.Sprite):
         self.is_powerful_level_2 = False
         self.is_powerful_level_3 = False
         self.bullet_speed_double = False
+        self.bullet_delay = BULLET_DELAY
         self.buullet_damage = 1
         self.frame_num = 0
         self.mask = pygame.mask.from_surface(self.alive_frames[0])

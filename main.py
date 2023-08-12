@@ -234,7 +234,7 @@ def main():
             collided_dict = pygame.sprite.groupcollide(p.bullet_group, enemy_group, True, False, collided=pygame.sprite.collide_mask)
             for b in collided_dict.keys():
                 for e in collided_dict[b]:
-                    e.be_hit()
+                    e.be_hit(player.buullet_damage)
                     #被攻击时绘制血条
                     if not type(e) is SmallEnemyPlane:
                         e.draw_hp_line(screen)
