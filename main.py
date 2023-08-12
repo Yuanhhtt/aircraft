@@ -15,6 +15,10 @@ def bullet_supply_col(player : HeroPlane, bullet_supply : BulletSupply):
     if player.is_powerful_level_3 == False:
         player.powerful_level_3()
         return
+    if player.bullet_speed_double == False:
+        player.add_bullet_speed()
+        return
+    player.buullet_damage = player.buullet_damage * 2
 
 def main():
     pygame.init()
@@ -24,6 +28,10 @@ def main():
 
     pygame.display.set_caption('看谁打得久')
     screen_rect = screen.get_rect()
+    #设置鼠标键盘
+    pygame.mouse.set_visible(False)
+    pygame.event.set_grab(True)
+    pygame.key.stop_text_input()
 
     #加载声音资源
     pygame.mixer.music.load("sound/game_music.ogg")
@@ -73,22 +81,34 @@ def main():
     bomb_rect=bomb_image.get_rect()
     bomb_font=pygame.font.Font('font/font.ttf',48)
    
-
-    pygame.mouse.set_visible(False)
-    pygame.event.set_grab(True)
+    
 
     #自定义事件
+    #定时增加敌机血量
     INCREASE_DIFFICULTY = pygame.USEREVENT
     pygame.time.set_timer(INCREASE_DIFFICULTY, INCREASE_DIFFICULTY_TIME)
+    #火力强化level_1
     DOUBLE_BULLET = pygame.USEREVENT + 1
     pygame.time.set_timer(DOUBLE_BULLET, DOUBLE_BULLET_TIME)
+    #重新开始，key【R】事件
     RESTART_GAME = pygame.USEREVENT + 2
+    #火力强化level_2
     FIVE_BULLET = pygame.USEREVENT + 3
     pygame.time.set_timer(FIVE_BULLET, FIVE_BULLET_TIME)
+    #火力强化level_3
     SEVEN_BULLET = pygame.USEREVENT + 4
     pygame.time.set_timer(SEVEN_BULLET, SEVEN_BULLET_TIME)
+    #火力强化level_4，射速加强
+    ADD_BULLET_SPEED = pygame.USEREVENT + 5
+    pygame.time.set_timer(ADD_BULLET_SPEED, ADD_BULLET_SPEED_TIME)
+    #火力强化level_5，第一次子弹威力加强
+    ADD_BULLET_DAMAGE = pygame.USEREVENT + 6
+    pygame.time.set_timer(ADD_BULLET_DAMAGE, ADD_BULLET_DAMAGE_TIME)
+    #火力强化level_n，以上能力全部获得后，间隔固定时间子弹威力加强
+    ADD_BULLET_DAMAGE_LOOP = pygame.USEREVENT + 7
+    pygame.time.set_timer(ADD_BULLET_DAMAGE_LOOP, ADD_BULLET_DAMAGE_LOOP_TIME)
 
-    pygame.key.stop_text_input()
+    
     #定义游戏状态
     running = True
     game_going = True
@@ -100,10 +120,11 @@ def main():
 
     #初始化时间
     clock = pygame.time.Clock()
-    fps_ui = GameFps(gui_group, clock=clock)
+    # fps_ui = GameFps(gui_group, clock=clock)
     timer_ui = GameTimer(gui_group)
     timer_ui.start()
     while running:
+        clock.tick_busy_loop(FPS)
         #绘制背景
         screen.blit(background,(0,0))
         
@@ -121,6 +142,11 @@ def main():
                 if event.key == pygame.K_SPACE:
                     #按空格SPACE键使用核弹清屏
                     bomb_supply.use_bomb(score_ui)
+                if event.key == pygame.K_f:
+                    #调试用
+                    # bullet_supply.start()
+                    # bomb_supply.use_bomb(score_ui)
+                    prompt_ui.show("楷体，游戏结束，扫码上传成绩")
             elif event.type == INCREASE_DIFFICULTY:
                 #每xx秒提升难度，中、大敌机血量加1
                 if game_going:
@@ -144,6 +170,14 @@ def main():
                 upgrade_sound.play()
                 bullet_supply.start()
                 pygame.time.set_timer(SEVEN_BULLET, 0)
+            elif event.type == ADD_BULLET_SPEED:
+                upgrade_sound.play()
+                bullet_supply.start()
+                pygame.time.set_timer(ADD_BULLET_SPEED, 0)
+            elif event.type == ADD_BULLET_DAMAGE:
+                upgrade_sound.play()
+                bullet_supply.start()
+                pygame.time.set_timer(ADD_BULLET_DAMAGE, ADD_BULLET_DAMAGE_LOOP_TIME)
             elif event.type == RESTART_GAME:
                 #重新开始游戏
                 game_going = not game_going
@@ -163,6 +197,8 @@ def main():
                 pygame.time.set_timer(DOUBLE_BULLET, DOUBLE_BULLET_TIME)
                 pygame.time.set_timer(FIVE_BULLET, FIVE_BULLET_TIME)
                 pygame.time.set_timer(SEVEN_BULLET, SEVEN_BULLET_TIME)
+                pygame.time.set_timer(ADD_BULLET_SPEED, ADD_BULLET_SPEED_TIME)
+                pygame.time.set_timer(ADD_BULLET_DAMAGE, ADD_BULLET_DAMAGE_TIME)
                 #5.重置score_ui
                 score_ui.restart()
                 #6.核弹清零
@@ -241,7 +277,7 @@ def main():
         screen.blit(bomb_image,(10,SCREEN_HEIGHT-10-bomb_rect.height))
         screen.blit(bomb_text,(20+bomb_rect.width,SCREEN_HEIGHT-5-text_rect.height))
         pygame.display.update()
-        clock.tick(FPS)
+        
     pygame.quit()
 
 if __name__ == "__main__":

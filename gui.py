@@ -72,7 +72,7 @@ class GamePrompt(pygame.sprite.Sprite):
         super().__init__()
         self.group = group
         self.text = ""
-        self.font = pygame.font.SysFont(None, 30)
+        self.font = pygame.font.Font("font/simkai.ttf", 30)
         self.image = self.font.render(self.text, True, (255, 255, 255))
         self.rect = self.image.get_rect()
         self.last_show_ticks = 0
@@ -90,29 +90,38 @@ class GamePrompt(pygame.sprite.Sprite):
         if now - self.last_show_ticks > 3000:
             self.kill()
 
+#游戏结束界面
 class GameOverUI(pygame.sprite.Sprite):
     def __init__(self,  group: pygame.sprite.Group) -> None:
         super().__init__()
         self.group = group
-        self.font = pygame.font.SysFont(None, 35)
-        self.font_big = pygame.font.SysFont(None, 60)
-        self.text_top = self.font_big.render("Game Over", True, (255, 0, 0))
-        self.text_restart = self.font.render("1.Press the R key to restart the game.", True, (0, 0, 255))
-        self.text_exit = self.font.render("2.Press the ESC key to exit the game.", True, (0, 0, 255))
-        self.image = pygame.Surface((480, 400))
-        self.image.fill((255, 255, 255))
+        self.font = pygame.font.Font("font/simkai.ttf", 35)
+        self.font_big = pygame.font.Font("font/simkai.ttf", 60)
+        self.text_top = self.font_big.render("游戏结束", True, (255, 255, 255))
+        self.text_restart = self.font.render("1.按[R]键重新开始游戏.", True, (255, 255, 255))
+        self.text_exit = self.font.render("2.按[ESC]键退出游戏.", True, (255, 255, 255))
+        self.text_qrcode = self.font.render("扫码上传成绩", True, (255, 255, 255))
+        self.text_qrcode_rect = self.text_qrcode.get_rect()
+        #二维码
+        self.qrcode = pygame.image.load("images/qrcode.png").convert_alpha()
+        self.qr_rect = self.qrcode.get_rect()
+        self.image = pygame.Surface((480, 700))
+        self.image.fill((0, 0, 0))
         self.rect = self.image.get_rect()
-        self.rect.y = 200
-        self.image.set_colorkey((255, 255, 255))
+        self.image.set_colorkey((0, 0, 0))
+        self.qr_rect.center = self.rect.center
+        self.text_qrcode_rect.midtop = self.rect.midtop
+        self.text_qrcode_rect.y += 470
         
-    
     def show(self) -> None:
         self.add(self.group)
     
     def update(self) -> None:
-        self.image.blit(self.text_top, (100, 0))
-        self.image.blit(self.text_restart, (20, 80))
-        self.image.blit(self.text_exit, (20, 140))
+        self.image.blit(self.text_top, (110, 40))
+        self.image.blit(self.text_restart, (40, 120))
+        self.image.blit(self.text_exit, (40, 180))
+        self.image.blit(self.qrcode, self.qr_rect)
+        self.image.blit(self.text_qrcode, self.text_qrcode_rect)
         key_pressed = pygame.key.get_pressed()
         if key_pressed[pygame.K_r]:
             pygame.event.post(pygame.event.Event(pygame.USEREVENT + 2))

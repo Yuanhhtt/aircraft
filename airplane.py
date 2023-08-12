@@ -7,7 +7,7 @@ from bullet import *
 
 #英雄飞机类
 class HeroPlane(pygame.sprite.Sprite):
-    def __init__(self, group: pygame.sprite.Group, postion : tuple, speed = 6) -> None:
+    def __init__(self, group: pygame.sprite.Group, postion : tuple) -> None:
         super().__init__(group)
         self.group = group
         #加载飞行动画
@@ -20,8 +20,6 @@ class HeroPlane(pygame.sprite.Sprite):
             self.destroy_frames.append(pygame.image.load(i).convert_alpha())
         #动画帧索引
         self.frame_num = 0
-        #飞机速度
-        self.speed = speed
         #上一帧的更新时间
         self.last_update_time = pygame.time.get_ticks()
         self.frame_rate = FPS
@@ -36,25 +34,34 @@ class HeroPlane(pygame.sprite.Sprite):
         self.rect.midbottom = self.initial_position
         #飞机加入组
         self.add(self.group)
-        #加载子弹
         self.bullet_group = pygame.sprite.Group()
+        #加载炮管，初始1个，2分钟3个,4分钟5个，5分钟7个
         self.bullets = [Bullet(self.bullet_group) for i in range(BULLET_NUM)]
-        self.last_firing_time = pygame.time.get_ticks()
-        #子弹加强
         self.is_powerful = False
+        self.left_bullets = [BlueBullet(self.bullet_group) for i in range(BULLET_NUM)]
+        self.right_bullets = [BlueBullet(self.bullet_group) for i in range(BULLET_NUM)]
         self.is_powerful_level_2 = False
+        self.left_mid_bullets = [Bullet(self.bullet_group) for i in range(BULLET_NUM)]
+        self.right_mid_bullets = [Bullet(self.bullet_group) for i in range(BULLET_NUM)]
         self.is_powerful_level_3 = False
-        self.left_bullets = []
-        self.right_bullets = []
-        self.left_mid_bullets = []
-        self.right_mid_bullets = []
-        self.left_level3_bullets = []
-        self.right_level3_bullets = []
+        self.left_level3_bullets = [BlueBullet(self.bullet_group) for i in range(BULLET_NUM)]
+        self.right_level3_bullets = [BlueBullet(self.bullet_group) for i in range(BULLET_NUM)]
+        #子弹威力，初始1
+        self.buullet_damage = 1
         #加载子弹声音
         self.bullet_sound = pygame.mixer.Sound("sound/bullet.wav")
         self.bullet_sound.set_volume(0.2)
         self.destroy_sound = pygame.mixer.Sound("sound/me_down.wav")
         self.destroy_sound.set_volume(0.2)
+        #子弹射速延时
+        self.bullet_delay = BULLET_DELAY
+        self.bullet_speed_double = False
+        self.last_firing_time = pygame.time.get_ticks()
+    
+    def add_bullet_speed(self) -> None:
+        if self.bullet_speed_double == False:
+            self.bullet_speed_double = True
+            self.bullet_delay = self.bullet_delay // 2
     
     def set_mask(self) -> None:
         for x in range(20):
@@ -75,6 +82,8 @@ class HeroPlane(pygame.sprite.Sprite):
         self.is_powerful = False
         self.is_powerful_level_2 = False
         self.is_powerful_level_3 = False
+        self.bullet_speed_double = False
+        self.buullet_damage = 1
         self.frame_num = 0
         self.mask = pygame.mask.from_surface(self.alive_frames[0])
         self.set_mask()
@@ -83,20 +92,17 @@ class HeroPlane(pygame.sprite.Sprite):
         self.last_update_time = pygame.time.get_ticks()
     
     def powerful(self) -> None:
-        self.is_powerful = True
-        self.left_bullets = [BlueBullet(self.bullet_group) for i in range(BULLET_NUM)]
-        self.right_bullets = [BlueBullet(self.bullet_group) for i in range(BULLET_NUM)]
-    
+        if self.is_powerful == False:
+            self.is_powerful = True
+
     def powerful_level_2(self) -> None:
-        self.is_powerful_level_2 = True
-        self.left_mid_bullets = [Bullet(self.bullet_group) for i in range(BULLET_NUM)]
-        self.right_mid_bullets = [Bullet(self.bullet_group) for i in range(BULLET_NUM)]
-    
+        if self.is_powerful_level_2 == False:
+            self.is_powerful_level_2 = True
+            
     def powerful_level_3(self) -> None:
-        self.is_powerful_level_3 = True
-        self.left_level3_bullets = [BlueBullet(self.bullet_group) for i in range(BULLET_NUM)]
-        self.right_level3_bullets = [BlueBullet(self.bullet_group) for i in range(BULLET_NUM)]
-    
+        if self.is_powerful_level_3 == False:
+            self.is_powerful_level_3 = True
+            
     def firing(self) -> None:
         for b in self.bullets:
             if not b.alive():
@@ -142,11 +148,11 @@ class HeroPlane(pygame.sprite.Sprite):
         self.last_update_time = pygame.time.get_ticks()
     
     def input(self) ->None:
-        dis = pygame.math.Vector2(pygame.mouse.get_rel())
-        dis_len = dis.length()
-        if dis_len > self.speed:
-            dis.normalize_ip()
-            dis = dis*self.speed
+        dis = pygame.mouse.get_rel()
+        # dis_len = dis.length()
+        # if dis_len > self.speed:
+        #     dis.normalize_ip()
+        #     dis = dis*self.speed
 
         x = self.rect.center[0] + dis[0]
         y = self.rect.center[1] + dis[1]
@@ -163,10 +169,6 @@ class HeroPlane(pygame.sprite.Sprite):
             self.rect.centerx = 0
         else:
             self.rect.centerx = x
-
-        # if 0 <= x <= SCREEN_WIDTH and self.rect.height <= y <= SCREEN_HEIGHT:
-        #     self.rect.center = (x, y)
-        self.rect.center += dis
     
     def update(self) -> None:
         #根据ticks计算frame_num
@@ -181,7 +183,7 @@ class HeroPlane(pygame.sprite.Sprite):
                     self.frame_num = 0
             self.image = self.alive_frames[self.frame_num]
             #延时发射子弹
-            if now - self.last_firing_time > BULLET_DELAY:
+            if now - self.last_firing_time > self.bullet_delay:
                 self.firing()
             self.bullet_group.update()
             self.input()
@@ -392,7 +394,10 @@ class MidEnemyPlane(pygame.sprite.Sprite):
             self.move()
             if self.hit:
                 #被击中时切换动画
-                self.image = self.hit_frame
+                if delay > BULLET_DELAY/2:
+                    self.image = self.hit_frame
+                else:
+                    self.image = self.alive_frames[self.frame_num]
                 self.hit = False
             else:
                 if delay > self.frame_rate:
@@ -522,7 +527,10 @@ class BigEnemyPlane(pygame.sprite.Sprite):
             self.move()
             if self.hit:
                 #被击中时切换动画
-                self.image = self.hit_frame
+                if delay > BULLET_DELAY/2:
+                    self.image = self.hit_frame
+                else:
+                    self.image = self.alive_frames[self.frame_num]
                 self.hit = False
             else:
                 if delay > self.frame_rate:
