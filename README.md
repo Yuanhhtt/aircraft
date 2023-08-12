@@ -1,2 +1,2 @@
 # aircraft
- 学习使用pygame复刻微信打飞机游戏
+ 学习使用pygame复刻的微信打飞机游戏

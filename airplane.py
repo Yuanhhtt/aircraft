@@ -146,6 +146,7 @@ class HeroPlane(pygame.sprite.Sprite):
         for b in self.bullet_group.sprites():
             b.kill()
         self.destroy_sound.play()
+        self.kill()
         self.last_update_time = pygame.time.get_ticks()
     
     def input(self) ->None:
@@ -311,7 +312,6 @@ class MidEnemyPlane(pygame.sprite.Sprite):
         #上一帧的更新时间
         self.last_update_time = pygame.time.get_ticks()
         self.frame_rate = FPS
-        self.be_hit_delay = 0
         #飞机是否存活
         self.is_alive = True
         #是否被击中
@@ -442,7 +442,6 @@ class BigEnemyPlane(pygame.sprite.Sprite):
         #上一帧的更新时间
         self.last_update_time = pygame.time.get_ticks()
         self.frame_rate = FPS
-        self.be_hit_delay = 0
         #飞机是否存活
         self.is_alive = True
         #是否被击中

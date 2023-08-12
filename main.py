@@ -188,6 +188,7 @@ def main():
                 mid_enemy_list.append(MidEnemyPlane(enemy_group, mid_enemy_destroy_sound))
             elif event.type == RESTART_GAME:
                 #重新开始游戏
+                pygame.mouse.set_pos(screen_rect.midbottom)
                 game_going = not game_going
                 #1.重置palyer
                 player.restart()
@@ -221,6 +222,7 @@ def main():
         if not game_going:
             #游戏结束，显示结束UI
             gameover_ui.show()
+            pygame.mouse.set_pos(screen_rect.midbottom)
 
         #更新状态
         player_group.update()
