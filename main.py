@@ -70,6 +70,7 @@ def main():
     ]
     ##生成中型敌机
     mid_enemy_list = [MidEnemyPlane(enemy_group, mid_enemy_destroy_sound) for i in range(MID_ENEMY_NUM)]
+    add_mid_enemy_num = 0
     ##生成大型敌机
     big_enemy_list = [BigEnemyPlane(enemy_group, big_enemy_destroy_sound) for i in range(BIG_ENEMY_NUM)]
     ##生成子弹补给
@@ -105,8 +106,6 @@ def main():
     ADD_BULLET_DAMAGE = pygame.USEREVENT + 6
     pygame.time.set_timer(ADD_BULLET_DAMAGE, ADD_BULLET_DAMAGE_TIME)
     #火力强化level_n，以上能力全部获得后，间隔固定时间子弹威力加强
-    ADD_BULLET_DAMAGE_LOOP = pygame.USEREVENT + 7
-    pygame.time.set_timer(ADD_BULLET_DAMAGE_LOOP, ADD_BULLET_DAMAGE_LOOP_TIME)
 
     
     #定义游戏状态
@@ -143,10 +142,14 @@ def main():
                     #按空格SPACE键使用核弹清屏
                     bomb_supply.use_bomb(score_ui)
                 if event.key == pygame.K_f:
+                    pass
                     #调试用
-                    # bullet_supply.start()
-                    # bomb_supply.use_bomb(score_ui)
-                    prompt_ui.show("楷体，游戏结束，扫码上传成绩")
+                    bullet_supply.start()
+                    bomb_supply.use_bomb(score_ui)
+                    for e in big_enemy_list:
+                        e.increase_difficulty(int(e.hp_max*2))
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                bomb_supply.use_bomb(score_ui)
             elif event.type == INCREASE_DIFFICULTY:
                 #每xx秒提升难度，中、大敌机血量加1
                 if game_going:
@@ -162,22 +165,27 @@ def main():
                 upgrade_sound.play()
                 bullet_supply.start()
                 pygame.time.set_timer(DOUBLE_BULLET, 0)
+                mid_enemy_list.append(MidEnemyPlane(enemy_group, mid_enemy_destroy_sound))
             elif event.type == FIVE_BULLET:
                 upgrade_sound.play()
                 bullet_supply.start()
                 pygame.time.set_timer(FIVE_BULLET, 0)
+                mid_enemy_list.append(MidEnemyPlane(enemy_group, mid_enemy_destroy_sound))
             elif event.type == SEVEN_BULLET:
                 upgrade_sound.play()
                 bullet_supply.start()
                 pygame.time.set_timer(SEVEN_BULLET, 0)
+                mid_enemy_list.append(MidEnemyPlane(enemy_group, mid_enemy_destroy_sound))
             elif event.type == ADD_BULLET_SPEED:
                 upgrade_sound.play()
                 bullet_supply.start()
                 pygame.time.set_timer(ADD_BULLET_SPEED, 0)
+                mid_enemy_list.append(MidEnemyPlane(enemy_group, mid_enemy_destroy_sound))
             elif event.type == ADD_BULLET_DAMAGE:
                 upgrade_sound.play()
                 bullet_supply.start()
                 pygame.time.set_timer(ADD_BULLET_DAMAGE, ADD_BULLET_DAMAGE_LOOP_TIME)
+                mid_enemy_list.append(MidEnemyPlane(enemy_group, mid_enemy_destroy_sound))
             elif event.type == RESTART_GAME:
                 #重新开始游戏
                 game_going = not game_going
@@ -186,6 +194,8 @@ def main():
                 #2.重置敌机
                 for e in small_enemy_list:
                     e.restart()
+                for i in range(len(mid_enemy_list) - MID_ENEMY_NUM):
+                    mid_enemy_list.pop().kill()
                 for e in mid_enemy_list:
                     e.restart()
                 for e in big_enemy_list:

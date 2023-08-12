@@ -311,6 +311,7 @@ class MidEnemyPlane(pygame.sprite.Sprite):
         #上一帧的更新时间
         self.last_update_time = pygame.time.get_ticks()
         self.frame_rate = FPS
+        self.be_hit_delay = 0
         #飞机是否存活
         self.is_alive = True
         #是否被击中
@@ -393,20 +394,17 @@ class MidEnemyPlane(pygame.sprite.Sprite):
         if self.is_alive:
             #存活状态
             self.move()
+            if delay > self.frame_rate:
+                self.last_update_time = now
+                self.frame_num += 1
+            if self.frame_num == len(self.alive_frames):
+                self.frame_num = 0
+            self.image = self.alive_frames[self.frame_num]
             if self.hit:
                 #被击中时切换动画
-                if delay > BULLET_DELAY/2:
+                if delay > BULLET_DELAY / 2:
                     self.image = self.hit_frame
-                else:
-                    self.image = self.alive_frames[self.frame_num]
                 self.hit = False
-            else:
-                if delay > self.frame_rate:
-                    self.last_update_time = now
-                    self.frame_num += 1
-                if self.frame_num == len(self.alive_frames):
-                    self.frame_num = 0
-                self.image = self.alive_frames[self.frame_num]
         else:
             #死亡状态，显示一次炸毁动画
             if delay > self.frame_rate * 2:
@@ -444,6 +442,7 @@ class BigEnemyPlane(pygame.sprite.Sprite):
         #上一帧的更新时间
         self.last_update_time = pygame.time.get_ticks()
         self.frame_rate = FPS
+        self.be_hit_delay = 0
         #飞机是否存活
         self.is_alive = True
         #是否被击中
@@ -523,23 +522,21 @@ class BigEnemyPlane(pygame.sprite.Sprite):
         #根据ticks计算frame_num
         now = pygame.time.get_ticks()
         delay = now - self.last_update_time
+        
         if self.is_alive:
             #存活状态
             self.move()
+            if delay > self.frame_rate:
+                self.last_update_time = now
+                self.frame_num += 1
+            if self.frame_num == len(self.alive_frames):
+                self.frame_num = 0
+            self.image = self.alive_frames[self.frame_num]
             if self.hit:
                 #被击中时切换动画
-                if delay > BULLET_DELAY/2:
+                if delay > BULLET_DELAY / 2:
                     self.image = self.hit_frame
-                else:
-                    self.image = self.alive_frames[self.frame_num]
                 self.hit = False
-            else:
-                if delay > self.frame_rate:
-                    self.last_update_time = now
-                    self.frame_num += 1
-                if self.frame_num == len(self.alive_frames):
-                    self.frame_num = 0
-                self.image = self.alive_frames[self.frame_num]
         else:
             #死亡状态，显示一次炸毁动画
             if delay > self.frame_rate * 2:
