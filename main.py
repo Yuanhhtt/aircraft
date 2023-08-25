@@ -1,318 +1,335 @@
 import pygame
-import sys
+import sys, os, uuid, json, base64, rsa, qrcode
 from const import *
 from airplane import *
 from gui import *
 
-def bullet_supply_col(player : HeroPlane, bullet_supply : BulletSupply, big_enemy : BigEnemyPlane):
-    bullet_supply.get_supply()
-    if player.is_powerful == False:
-        player.powerful()
-        return
-    if player.is_powerful_level_2 == False:
-        player.powerful_level_2()
-        return
-    if player.is_powerful_level_3 == False:
-        player.powerful_level_3()
-        return
-    if player.bullet_speed_double == False:
-        player.add_bullet_speed()
-        player.buullet_damage = big_enemy.hp_max // (50 * 7 * 2)
-        return
-    player.buullet_damage = big_enemy.hp_max // (50 * 7 * 2)
-
-def main():
-    pygame.init()
-
-    screen_size = (SCREEN_WIDTH, SCREEN_HEIGHT)
-    screen=pygame.display.set_mode(screen_size)
-
-    pygame.display.set_caption('是男人就打十分钟')
-    screen_rect = screen.get_rect()
-    #设置鼠标键盘
-    pygame.mouse.set_visible(False)
-    pygame.event.set_grab(True)
-    pygame.key.stop_text_input()
-
-    #加载声音资源
-    pygame.mixer.music.load("sound/game_music.ogg")
-    pygame.mixer.music.set_volume(0.1)
-    pygame.mixer.music.play(-1)
-
-    small_enemy_destroy_sound = pygame.mixer.Sound("sound/enemy1_down.wav")
-    small_enemy_destroy_sound.set_volume(0.2)
-    mid_enemy_destroy_sound = pygame.mixer.Sound("sound/enemy2_down.wav")
-    mid_enemy_destroy_sound.set_volume(0.2)
-    big_enemy_destroy_sound = pygame.mixer.Sound("sound/enemy3_down.wav")
-    big_enemy_destroy_sound.set_volume(0.2)
-    big_enemy_flying_sound = pygame.mixer.Sound("sound/enemy3_flying.wav")
-    big_enemy_flying_sound.set_volume(0.2)
-    upgrade_sound = pygame.mixer.Sound("sound/upgrade.wav")
-    upgrade_sound.set_volume(0.2)
+class GameManage:
+    def __init__(self) -> None:
+        pygame.init()
+        self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.DOUBLEBUF | pygame.HWSURFACE)
+        self.screen_rect = self.screen.get_rect()
+        pygame.display.set_caption(f"{GAME_TITLE}--{GAME_VERSION}")
+        #设置鼠标键盘
+        pygame.mouse.set_visible(False)
+        pygame.event.set_grab(True)
+        pygame.key.stop_text_input()
+        #加载背景音乐
+        pygame.mixer.init()
+        pygame.mixer.set_reserved(1)
+        pygame.mixer.set_reserved(2)
+        pygame.mixer.music.load("sound/game_music.ogg")
+        pygame.mixer.music.set_volume(0.1)
+        pygame.mixer.music.play(-1)
+        #获取用户信息
+        self.userinfo = {}
+        self.get_userinfo()
+        #背景动画
+        self.bg_group = pygame.sprite.OrderedUpdates()
+        self.bg_sprites = [BGSprite(self.bg_group, (0, 0)), BGSprite(self.bg_group, (0, -SCREEN_HEIGHT))]
+        #UI精灵组
+        self.gui_group = pygame.sprite.OrderedUpdates()
+        self.timer_ui = GameTimer(self.gui_group)
+        self.score_ui = GameScore(self.gui_group)
+        self.username_ui = GameUser(self.gui_group, self.userinfo["name"])
+        self.bomb_ui = BombUI(self.gui_group)
+        self.bomb_icon = Bomb_Icon(self.gui_group)
+        self.gameover_ui = GameOverUI(self.gui_group)
+        #玩家飞机精灵
+        self.player_group = pygame.sprite.OrderedUpdates()
+        self.player = HeroPlane(self.player_group, self.screen_rect.midbottom)
+        #敌机精灵组
+        ##生成小型敌机
+        self.small_enemy_group = pygame.sprite.OrderedUpdates()
+        self.small_enemy_list = [SmallEnemyPlane(self.small_enemy_group) for i in range(SMALL_ENEMY_NUM)]
+        ##生成中型敌机
+        self.mid_enemy_group = pygame.sprite.OrderedUpdates()
+        self.mid_enemy_list = [MidEnemyPlane(self.mid_enemy_group) for i in range(MID_ENEMY_NUM)]
+        ##生成大型敌机
+        self.big_enemy_group = pygame.sprite.OrderedUpdates()
+        self.big_enemy_list = [BigEnemyPlane(self.big_enemy_group) for i in range(BIG_ENEMY_NUM)]
+        #补给组
+        self.supply_group = pygame.sprite.OrderedUpdates()
+        ##生成子弹补给
+        self.bullet_supply = BulletSupply(self.supply_group)
+        ##生成核弹补给
+        self.bomb_supply = BombSupply(self.supply_group)
+        #设置游戏状态
+        self.status = GAME_STATUS.START
+        #开始计时
+        self.init_timer()
+        self.clock = pygame.time.Clock()
+        self.timer_ui.start()
     
+    def init_timer(self):
+        pygame.time.set_timer(INCREASE_DIFFICULTY, INCREASE_DIFFICULTY_TIME)
+        pygame.time.set_timer(DOUBLE_BULLET, DOUBLE_BULLET_TIME)
+        pygame.time.set_timer(FIVE_BULLET, FIVE_BULLET_TIME)
+        pygame.time.set_timer(SEVEN_BULLET, SEVEN_BULLET_TIME)
+        pygame.time.set_timer(ADD_BULLET_SPEED, ADD_BULLET_SPEED_TIME)
+        pygame.time.set_timer(ADD_BULLET_DAMAGE, ADD_BULLET_DAMAGE_TIME)
+        pygame.time.set_timer(ADD_BIG_ENEMY, ADD_BIG_ENEMY_TIME)
 
-    #加载图片
-    background=pygame.image.load(IMAGE_PATH['background'])
-    small_alive_frames = [pygame.image.load(i).convert_alpha() for i in IMAGE_PATH['enemy_small']]
-    small_destroy_frames = [pygame.image.load(i).convert_alpha() for i in IMAGE_PATH['enemy_small_destroy']]
-
-    #创建Sprite组对象
-    all_visible_group = pygame.sprite.OrderedUpdates()
-    player_group = pygame.sprite.OrderedUpdates()
-    enemy_group = pygame.sprite.OrderedUpdates()
-    gui_group = pygame.sprite.OrderedUpdates()
-
-    #创建Sprite对象
-    ##生成player
-    player = HeroPlane(player_group, screen_rect.midbottom)
-    ##生成小型敌机
-    small_enemy_list = [
-        SmallEnemyPlane(enemy_group, small_alive_frames, small_destroy_frames, small_enemy_destroy_sound) for i in range(SMALL_ENEMY_NUM)
-    ]
-    ##生成中型敌机
-    mid_enemy_list = [MidEnemyPlane(enemy_group, mid_enemy_destroy_sound) for i in range(MID_ENEMY_NUM)]
-    add_mid_enemy_num = 0
-    ##生成大型敌机
-    big_enemy_list = [BigEnemyPlane(enemy_group, big_enemy_destroy_sound) for i in range(BIG_ENEMY_NUM)]
-    ##生成子弹补给
-    bullet_supply = BulletSupply(all_visible_group)
-    ##生成核弹补给
-    bomb_supply = BombSupply(all_visible_group)
-    #初始化核弹UI
-    bomb_image=pygame.image.load('images/bomb.png').convert_alpha()
-    bomb_rect=bomb_image.get_rect()
-    bomb_font=pygame.font.Font('font/font.ttf',48)
-   
-    
-
-    #自定义事件
-    #定时增加敌机血量
-    INCREASE_DIFFICULTY = pygame.USEREVENT
-    pygame.time.set_timer(INCREASE_DIFFICULTY, INCREASE_DIFFICULTY_TIME)
-    #火力强化level_1
-    DOUBLE_BULLET = pygame.USEREVENT + 1
-    pygame.time.set_timer(DOUBLE_BULLET, DOUBLE_BULLET_TIME)
-    #重新开始，key【R】事件
-    RESTART_GAME = pygame.USEREVENT + 2
-    #火力强化level_2
-    FIVE_BULLET = pygame.USEREVENT + 3
-    pygame.time.set_timer(FIVE_BULLET, FIVE_BULLET_TIME)
-    #火力强化level_3
-    SEVEN_BULLET = pygame.USEREVENT + 4
-    pygame.time.set_timer(SEVEN_BULLET, SEVEN_BULLET_TIME)
-    #火力强化level_4，射速加强
-    ADD_BULLET_SPEED = pygame.USEREVENT + 5
-    pygame.time.set_timer(ADD_BULLET_SPEED, ADD_BULLET_SPEED_TIME)
-    #火力强化level_5，第一次子弹威力加强，以后间隔ADD_BULLET_DAMAGE_TIME子弹威力加强
-    ADD_BULLET_DAMAGE = pygame.USEREVENT + 6
-    pygame.time.set_timer(ADD_BULLET_DAMAGE, ADD_BULLET_DAMAGE_TIME)
-    #第一次ADD_BIG_ENEMY_TIME时间加一架大敌机，以后间隔ADD_BIG_ENEMY_LOOP_TIME加一架大敌机
-    ADD_BIG_ENEMY = pygame.USEREVENT + 7
-
-    
-    #定义游戏状态
-    running = True
-    game_going = True
-
-    #初始化游戏提示UI
-    prompt_ui = GamePrompt(gui_group)
-    gameover_ui = GameOverUI(gui_group)
-    score_ui = GameScore(gui_group)
-
-    #初始化时间
-    clock = pygame.time.Clock()
-    # fps_ui = GameFps(gui_group, clock=clock)
-    timer_ui = GameTimer(gui_group)
-    timer_ui.start()
-    while running:
-        clock.tick_busy_loop(FPS)
-        #绘制背景
-        screen.blit(background,(0,0))
-        
-        #获取事件
+    def check_event(self):
         for event in pygame.event.get():
             #处理关闭事件
             if event.type == pygame.QUIT:
-                running = False
-                pygame.mixer.stop()
-                break
+                pygame.quit()
+                sys.exit()
             elif event.type == pygame.KEYDOWN:
+                #按ESC键退出游戏
                 if event.key == pygame.K_ESCAPE:
-                    #按ESC键退出游戏
                     pygame.event.post(pygame.event.Event(pygame.QUIT))
                 if event.key == pygame.K_SPACE:
                     #按空格SPACE键使用核弹清屏
-                    bomb_supply.use_bomb(score_ui)
-                if event.key == pygame.K_f:
-                    #调试用
-                    # for i in range(6):
-                    #     mid_enemy_list.append(MidEnemyPlane(enemy_group, mid_enemy_destroy_sound, hp_max=mid_enemy_list[0].hp_max))
-                    # for e in range(60):
-                    #     if game_going:
-                    #         for e in mid_enemy_list:
-                    #             e.increase_difficulty(int(e.hp_max*0.1))
-                    #             e.hp = e.hp_max
-                    #         for e in big_enemy_list:
-                    #             e.increase_difficulty(int(e.hp_max*0.1))
-                    #             e.hp = e.hp_max
-                    # player.powerful()
-                    # player.powerful_level_2()
-                    # player.powerful_level_3()
-                    # player.add_bullet_speed()
-                    # player.buullet_damage = big_enemy_list[0].hp_max // (50 * 7 * 2)
-                    pass
-                    
+                    self.bomb_ui.use_bomb(self.score_ui, self.screen_rect, self.big_enemy_list, self.mid_enemy_list, self.small_enemy_list)
+            elif event.type == RESTART_GAME:
+                self.restart()
             elif event.type == pygame.MOUSEBUTTONDOWN:
-                bomb_supply.use_bomb(score_ui)
+                self.bomb_ui.use_bomb(self.score_ui, self.screen_rect, self.big_enemy_list, self.mid_enemy_list, self.small_enemy_list)
             elif event.type == INCREASE_DIFFICULTY:
                 #每xx秒提升难度，中、大敌机血量加1
-                if game_going:
-                    for e in mid_enemy_list:
+                if self.status == GAME_STATUS.START:
+                    for e in self.mid_enemy_list:
                         e.increase_difficulty(int(e.hp_max*0.1))
-                    for e in big_enemy_list:
+                    for e in self.big_enemy_list:
                         e.increase_difficulty(int(e.hp_max*0.1))
-                    # upgrade_sound.play()
-                    # prompt_ui.show("increase difficulty!")
-                # print(int(clock.get_fps()))
             elif event.type == ADD_BIG_ENEMY:
-                big_enemy_list.append(BigEnemyPlane(enemy_group, big_enemy_destroy_sound, hp_max=big_enemy_list[0].hp_max))
+                self.big_enemy_list.append(BigEnemyPlane(self.big_enemy_group, hp_max=self.big_enemy_list[0].hp_max))
                 pygame.time.set_timer(ADD_BIG_ENEMY, ADD_BIG_ENEMY_LOOP_TIME)
+                self.bg_sprites[0].add_speed()
+                self.bg_sprites[1].add_speed()
+                for e in self.small_enemy_list:
+                    e.speed += 1
+                for e in self.mid_enemy_list:
+                    e.speed += 1
+                for e in self.big_enemy_list:
+                    e.speed += 1
+                self.bomb_supply.speed += 1
+                self.bullet_supply.speed += 1
             elif event.type == DOUBLE_BULLET:
                 #获得子弹强化
-                upgrade_sound.play()
-                bullet_supply.start()
+                self.bullet_supply.start()
                 pygame.time.set_timer(DOUBLE_BULLET, 0)
-                mid_enemy_list.append(MidEnemyPlane(enemy_group, mid_enemy_destroy_sound, hp_max=mid_enemy_list[0].hp_max))
+                self.mid_enemy_list.append(MidEnemyPlane(self.mid_enemy_group, hp_max=self.mid_enemy_list[0].hp_max))
             elif event.type == FIVE_BULLET:
-                upgrade_sound.play()
-                bullet_supply.start()
+                self.bullet_supply.start()
                 pygame.time.set_timer(FIVE_BULLET, 0)
-                mid_enemy_list.append(MidEnemyPlane(enemy_group, mid_enemy_destroy_sound, hp_max=mid_enemy_list[0].hp_max))
+                self.mid_enemy_list.append(MidEnemyPlane(self.mid_enemy_group, hp_max=self.mid_enemy_list[0].hp_max))
             elif event.type == SEVEN_BULLET:
-                upgrade_sound.play()
-                bullet_supply.start()
+                self.bullet_supply.start()
                 pygame.time.set_timer(SEVEN_BULLET, 0)
-                mid_enemy_list.append(MidEnemyPlane(enemy_group, mid_enemy_destroy_sound, hp_max=mid_enemy_list[0].hp_max))
+                self.mid_enemy_list.append(MidEnemyPlane(self.mid_enemy_group, hp_max=self.mid_enemy_list[0].hp_max))
             elif event.type == ADD_BULLET_SPEED:
-                upgrade_sound.play()
-                bullet_supply.start()
+                self.bullet_supply.start()
                 pygame.time.set_timer(ADD_BULLET_SPEED, 0)
-                mid_enemy_list.append(MidEnemyPlane(enemy_group, mid_enemy_destroy_sound, hp_max=mid_enemy_list[0].hp_max))
+                self.mid_enemy_list.append(MidEnemyPlane(self.mid_enemy_group, hp_max=self.mid_enemy_list[0].hp_max))
             elif event.type == ADD_BULLET_DAMAGE:
-                upgrade_sound.play()
-                bullet_supply.start()
+                self.bullet_supply.start()
                 pygame.time.set_timer(ADD_BULLET_DAMAGE, ADD_BULLET_DAMAGE_LOOP_TIME)
-                mid_enemy_list.append(MidEnemyPlane(enemy_group, mid_enemy_destroy_sound, hp_max=mid_enemy_list[0].hp_max))
-            elif event.type == RESTART_GAME:
-                #重新开始游戏
-                pygame.mouse.set_pos(screen_rect.midbottom)
-                game_going = not game_going
-                #1.重置palyer
-                player.restart()
-                #2.重置敌机
-                for e in small_enemy_list:
-                    e.restart()
-                for i in range(len(mid_enemy_list) - MID_ENEMY_NUM):
-                    mid_enemy_list.pop().kill()
-                for e in mid_enemy_list:
-                    e.restart()
-                for i in range(len(big_enemy_list) - BIG_ENEMY_NUM):
-                    big_enemy_list.pop().kill()
-                for e in big_enemy_list:
-                    e.restart()
-                #3.重置timer_ui
-                timer_ui.start()
-                #4.重置定时器
-                pygame.time.set_timer(INCREASE_DIFFICULTY, INCREASE_DIFFICULTY_TIME)
-                pygame.time.set_timer(DOUBLE_BULLET, DOUBLE_BULLET_TIME)
-                pygame.time.set_timer(FIVE_BULLET, FIVE_BULLET_TIME)
-                pygame.time.set_timer(SEVEN_BULLET, SEVEN_BULLET_TIME)
-                pygame.time.set_timer(ADD_BULLET_SPEED, ADD_BULLET_SPEED_TIME)
-                pygame.time.set_timer(ADD_BULLET_DAMAGE, ADD_BULLET_DAMAGE_TIME)
-                pygame.time.set_timer(ADD_BIG_ENEMY, ADD_BIG_ENEMY_TIME)
-                #5.重置score_ui
-                score_ui.restart()
-                #6.核弹清零
-                bomb_supply.bomb_num = 0
-                bomb_supply.kill()
-                #7.重置补给
-                bullet_supply.kill()
-        
-        #判断游戏进行状态
-        if not game_going:
-            #游戏结束，显示结束UI
-            gameover_ui.show()
-            pygame.mouse.set_pos(screen_rect.midbottom)
+                self.mid_enemy_list.append(MidEnemyPlane(self.mid_enemy_group, hp_max=self.mid_enemy_list[0].hp_max))
+    
+    def bullet_supply_col(self, player : HeroPlane):
+        self.bullet_supply.get_supply()
+        if player.is_powerful == False:
+            player.powerful()
+            return
+        if player.is_powerful_level_2 == False:
+            player.powerful_level_2()
+            return
+        if player.is_powerful_level_3 == False:
+            player.powerful_level_3()
+            return
+        if player.bullet_speed_double == False:
+            player.add_bullet_speed()
+            return
+        player.buullet_damage = self.big_enemy_list[0].hp_max // (50 * 7 * 2)
+        return
 
-        #更新状态
-        player_group.update()
-        enemy_group.update()
-        gui_group.update()
-        bullet_supply.update()
-        bomb_supply.update()
-        
-        
-        for p in player_group.sprites():
-            #player与敌机之间的碰撞检测
-            collided_list = pygame.sprite.spritecollide(p, enemy_group, False, collided=pygame.sprite.collide_mask)
+    def player_collide_check(self):
+        for p in self.player_group.sprites():
+             #player与敌机之间的碰撞检测
+            collided_list = pygame.sprite.spritecollide(p, self.small_enemy_group, False, collided=pygame.sprite.collide_mask)
+            collided_list = collided_list + pygame.sprite.spritecollide(p, self.mid_enemy_group, False, collided=pygame.sprite.collide_mask)
+            collided_list = collided_list + pygame.sprite.spritecollide(p, self.big_enemy_group, False, collided=pygame.sprite.collide_mask)
             if collided_list:
                 #机毁人亡，游戏结束
-                timer_ui.stop()
+                self.timer_ui.stop()
                 p.destroy()
                 for col_enemy in collided_list:
                     col_enemy.destroy()
-                game_going = not game_going
-            #子弹与敌机之间的碰撞检测
-            collided_dict = pygame.sprite.groupcollide(p.bullet_group, enemy_group, True, False, collided=pygame.sprite.collide_mask)
-            for b in collided_dict.keys():
-                for e in collided_dict[b]:
-                    e.be_hit(player.buullet_damage)
-                    #被攻击时绘制血条
-                    if not type(e) is SmallEnemyPlane:
-                        e.draw_hp_line(screen)
-                    #计算分数
-                    if not e.is_alive:
-                        score_ui.add_score(e.hp_max)
-                        #击毁大型敌机，获得核弹*1
-                        if type(e) is BigEnemyPlane:
-                            upgrade_sound.play()
-                            bomb_supply.start()
-            #子弹补给碰撞检测
-            if bullet_supply.alive():
-                if pygame.sprite.collide_mask(p, bullet_supply):
-                    bullet_supply_col(p, bullet_supply, big_enemy_list[0])
-            #核弹补给碰撞检测
-            if bomb_supply.alive():
-                if pygame.sprite.collide_mask(p, bomb_supply):
-                    bomb_supply.get_supply()
-        
-        #绘制图像
-        #先画大型敌机
-        for e in big_enemy_list:
-            if e.alive():
-                if e.rect.bottom > 0:
-                    e.add(all_visible_group)
-        for e in mid_enemy_list:
-            if e.alive():
-                if e.rect.bottom > 0:
-                    e.add(all_visible_group)
-        for e in small_enemy_list:
-            if e.alive():
-                if e.rect.bottom > 0:
-                    e.add(all_visible_group)
-        all_visible_group.add(player_group, player.bullet_group)
-        all_visible_group.draw(screen)
-        gui_group.draw(screen)
-        #绘制全屏炸弹数量
-        bomb_text=bomb_font.render('× %d' % (bomb_supply.bomb_num),True, (255, 255, 255))
-        text_rect=bomb_text.get_rect()
-        screen.blit(bomb_image,(10,SCREEN_HEIGHT-10-bomb_rect.height))
-        screen.blit(bomb_text,(20+bomb_rect.width,SCREEN_HEIGHT-5-text_rect.height))
-        pygame.display.update()
-        
-    pygame.quit()
+                self.status = GAME_STATUS.STOP
+            
+            #player与补给碰撞检测
+            if self.bullet_supply.alive():
+                if pygame.sprite.collide_mask(p, self.bullet_supply):
+                    self.bullet_supply_col(p)
 
+            #核弹补给碰撞检测
+            if self.bomb_supply.alive():
+                if pygame.sprite.collide_mask(p, self.bomb_supply):
+                    self.bomb_supply.get_supply(self.bomb_ui)
+
+    def bullet_collide_check(self):
+        #子弹与敌机之间的碰撞检测
+        collided_dict = pygame.sprite.groupcollide(self.player.bullet_group, self.small_enemy_group, True, False, collided=pygame.sprite.collide_mask)
+        for b in collided_dict.keys():
+            for e in collided_dict[b]:
+                e.be_hit(self.player.buullet_damage)
+                if not e.is_alive:
+                    self.score_ui.add_score(1)
+        collided_dict = pygame.sprite.groupcollide(self.player.bullet_group, self.mid_enemy_group, True, False, collided=pygame.sprite.collide_mask)
+        for b in collided_dict.keys():
+            for e in collided_dict[b]:
+                e.be_hit(self.player.buullet_damage)
+                if not e.is_alive:
+                    self.score_ui.add_score(3)
+                else:
+                    #绘制血条
+                    self.draw_hp_line(e)
+        collided_dict = pygame.sprite.groupcollide(self.player.bullet_group, self.big_enemy_group, True, False, collided=pygame.sprite.collide_mask)
+        for b in collided_dict.keys():
+            for e in collided_dict[b]:
+                e.be_hit(self.player.buullet_damage)
+                if not e.is_alive:
+                    self.score_ui.add_score(10)
+                    self.bomb_supply.start()
+                else:
+                    #绘制血条
+                    self.draw_hp_line(e)
+
+    def get_userinfo(self):
+        #获取MAC_ID
+        self.userinfo["mac_id"] = hex(uuid.getnode()).upper()[2:]
+        #检测"config.json"文件是否存在
+        config_file = "config.json"
+        if os.path.exists(config_file):
+            with open(config_file, "r", encoding='utf-8') as f:
+                try:
+                    data = json.load(f)
+                except Exception as e:
+                    f.close()
+                    os.remove(config_file)
+                    self.userinfo["name"]= os.getlogin()
+                    return
+            self.userinfo["name"] = data["name"].encode()[:12].decode()
+        else:
+            #使用系统用户名
+            self.userinfo["name"] = os.getlogin().encode()[:12].decode()
+            #写入"config.json"文件
+            with open(config_file, "w", encoding='utf-8') as f:
+                json.dump({"name" : self.userinfo["name"]}, f, ensure_ascii=False)
+
+    def encrypt(self, message: str):
+        with open("s_public.pem") as f:
+            p = f.read()
+        pubkey = rsa.PublicKey.load_pkcs1(p)
+        c = rsa.encrypt(message.encode(), pubkey)
+        c_text = base64.b32encode(c)
+        return c_text.decode()
+
+    def stop(self):
+        #对mac_id, name, duration, score进行加密,返回密文
+        m = f'{self.userinfo["mac_id"]};{self.userinfo["name"]};{self.timer_ui.duration()};{self.score_ui.score}'
+        c = self.encrypt(m)
+        url = f'http://www.autojy.fun/aircraft/submit?c={c}'
+        # print(url)
+        #使用url生成QRCODE二维码图片，传给self.gameover_ui.show()
+        os.remove('images/qrcode.png')
+        qr = qrcode.QRCode(box_size=5 ,border=2)
+        qr.add_data(url)
+        qr.make()
+        img = qr.make_image(fill_color = 'green', back_color = 'white')
+        img.save('images/qrcode.png')
+        self.gameover_ui.show()
+    
+    def restart(self):
+        #1.重置BG speed
+        self.bg_sprites[0].speed = FLY_SPEED
+        self.bg_sprites[1].speed = FLY_SPEED
+        #2.重置palyer
+        self.player.restart()
+        #3.重置敌机
+        for e in self.small_enemy_list:
+            e.restart()
+        for i in range(len(self.mid_enemy_list) - MID_ENEMY_NUM):
+            self.mid_enemy_list.pop().kill()
+        for e in self.mid_enemy_list:
+            e.restart()
+        for i in range(len(self.big_enemy_list) - BIG_ENEMY_NUM):
+            self.big_enemy_list.pop().kill()
+        for e in self.big_enemy_list:
+            e.restart()
+        #4.重置score_ui
+        self.score_ui.restart()
+        #5.核弹清零
+        self.bomb_ui.bomb_num = 0
+        self.bomb_supply.kill()
+        self.bomb_supply.speed = SUPPLY_SPEED
+        #6.重置子弹补给
+        self.bullet_supply.kill()
+        self.bullet_supply.speed = SUPPLY_SPEED
+        #7.重置定时器
+        self.init_timer()
+        #8.删除上次生成的二维码图片
+        pass
+        #9.重新开始计时
+        self.timer_ui.start()
+        #10.重置游戏状态
+        self.status = GAME_STATUS.START
+
+    def draw_hp_line(self, enemy):
+        line_width = enemy.rect.width - 20
+        line_height = 5
+        line_y = enemy.rect.y + enemy.rect.height - 5
+        point_a = (enemy.rect.x + 10, line_y)
+        point_b = (enemy.rect.x + enemy.rect.width - 10, line_y)
+        line_color = (0, 0, 0)
+
+        pygame.draw.line(self.screen, line_color, point_a, point_b, line_height)
+        remain = enemy.hp / enemy.hp_max
+        if remain > 0.3:
+            line_color = (0, 255, 0)
+        else:
+            line_color = (255, 0, 0)
+        point_c = (point_a[0] + int(line_width*remain), line_y)
+        pygame.draw.line(self.screen, line_color, point_a, point_c, line_height)
+
+    def run(self):
+        while True:
+            #设置帧率
+            self.clock.tick(FPS)
+            #事件检测
+            self.check_event()
+            #结束状态判断
+            if self.status == GAME_STATUS.STOP:
+                #游戏结束
+                self.stop()
+                self.status = GAME_STATUS.SHOW_QR
+            #更新
+            self.bg_group.update()
+            self.big_enemy_group.update()
+            self.mid_enemy_group.update()
+            self.small_enemy_group.update()
+            self.player_group.update()
+            self.supply_group.update()
+            self.gui_group.update()
+
+            #绘制背景
+            self.bg_group.draw(self.screen)
+            #碰撞检测
+            self.player_collide_check()
+            self.bullet_collide_check()
+            #绘制
+            self.big_enemy_group.draw(self.screen)
+            self.mid_enemy_group.draw(self.screen)
+            self.small_enemy_group.draw(self.screen)
+            self.player_group.draw(self.screen)
+            self.supply_group.draw(self.screen)
+            self.player.bullet_group.draw(self.screen)
+            self.gui_group.draw(self.screen)
+            pygame.display.flip()
+            
 if __name__ == "__main__":
-    main()
-    # app = Game()
-    # app.start()
+    app = GameManage()
+    app.run()

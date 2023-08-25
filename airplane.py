@@ -1,5 +1,3 @@
-from time import sleep
-from tkinter.messagebox import NO
 import pygame
 import random
 from const import *
@@ -51,12 +49,14 @@ class HeroPlane(pygame.sprite.Sprite):
         #加载子弹声音
         self.bullet_sound = pygame.mixer.Sound("sound/bullet.wav")
         self.bullet_sound.set_volume(0.2)
+        self.last_paly_time = 0
+        #加载机毁声音
         self.destroy_sound = pygame.mixer.Sound("sound/me_down.wav")
-        self.destroy_sound.set_volume(0.2)
+        self.destroy_sound.set_volume(0.3)
         #子弹射速延时
         self.bullet_delay = BULLET_DELAY
+        self.last_firing_time = 0
         self.bullet_speed_double = False
-        self.last_firing_time = pygame.time.get_ticks()
     
     def add_bullet_speed(self) -> None:
         if self.bullet_speed_double == False:
@@ -136,8 +136,8 @@ class HeroPlane(pygame.sprite.Sprite):
                 if not b.alive():
                     b.reset((self.rect.centerx + 47,self.rect.centery + 30))
                     break
-        self.bullet_sound.play()
         self.last_firing_time = pygame.time.get_ticks()
+        self.bullet_sound.play()
     
     def destroy(self) -> None:
         self.is_alive = False
@@ -146,16 +146,10 @@ class HeroPlane(pygame.sprite.Sprite):
         for b in self.bullet_group.sprites():
             b.kill()
         self.destroy_sound.play()
-        self.kill()
         self.last_update_time = pygame.time.get_ticks()
     
     def input(self) ->None:
         dis = pygame.mouse.get_rel()
-        # dis_len = dis.length()
-        # if dis_len > self.speed:
-        #     dis.normalize_ip()
-        #     dis = dis*self.speed
-
         x = self.rect.center[0] + dis[0]
         y = self.rect.center[1] + dis[1]
         if y > SCREEN_HEIGHT:
@@ -187,6 +181,9 @@ class HeroPlane(pygame.sprite.Sprite):
             #延时发射子弹
             if now - self.last_firing_time > self.bullet_delay:
                 self.firing()
+                # if now - self.last_paly_time > BULLET_SOUND_DELAY:
+                #     self.bullet_sound.play()
+                #     self.last_paly_time = now
             self.bullet_group.update()
             self.input()
         else:
@@ -201,16 +198,15 @@ class HeroPlane(pygame.sprite.Sprite):
 
 #小号敌机类
 class SmallEnemyPlane(pygame.sprite.Sprite):
-    def __init__(
-        self, group: pygame.sprite.Group, alive_frames, destroy_frames, destroy_sound, speed = 5, hp = SMALL_ENEMY_HP
-    ) -> None:
+    def __init__(self, group: pygame.sprite.Group, speed = SMALL_ENEMY_SPEED, hp = SMALL_ENEMY_HP) -> None:
         super().__init__(group)
         self.group = group
-        self.destroy_sound = destroy_sound
+        self.destroy_sound = pygame.mixer.Sound("sound/enemy1_down.wav")
+        self.destroy_sound.set_volume(0.2)
         #加载飞行动画
-        self.alive_frames = alive_frames
+        self.alive_frames = [pygame.image.load(i).convert_alpha() for i in IMAGE_PATH['enemy_small']]
         #加载炸毁时动画
-        self.destroy_frames = destroy_frames
+        self.destroy_frames = [pygame.image.load(i).convert_alpha() for i in IMAGE_PATH['enemy_small_destroy']]
         #动画帧索引
         self.frame_num = 0
         #飞机速度
@@ -232,6 +228,7 @@ class SmallEnemyPlane(pygame.sprite.Sprite):
     
     def restart(self) -> None:
         self.reset()
+        self.speed = SMALL_ENEMY_SPEED
     
     def be_hit(self, damage=1) -> None:
         if self.hp <= 0:
@@ -288,10 +285,11 @@ class SmallEnemyPlane(pygame.sprite.Sprite):
 
 #中号敌机类
 class MidEnemyPlane(pygame.sprite.Sprite):
-    def __init__(self, group: pygame.sprite.Group, destroy_sound, speed = 3, hp_max = MID_ENEMY_HP) -> None:
+    def __init__(self, group: pygame.sprite.Group, speed = MID_ENEMY_SPEED, hp_max = MID_ENEMY_HP) -> None:
         super().__init__(group)
         self.group = group
-        self.destroy_sound = destroy_sound
+        self.destroy_sound = pygame.mixer.Sound("sound/enemy2_down.wav")
+        self.destroy_sound.set_volume(0.2)
         #加载飞行动画
         self.alive_frames = []
         for i in IMAGE_PATH['enemy_mid']:
@@ -328,28 +326,10 @@ class MidEnemyPlane(pygame.sprite.Sprite):
         self.reset()
         self.hp_max = MID_ENEMY_HP
         self.hp = self.hp_max
+        self.speed = MID_ENEMY_SPEED
     
     def increase_difficulty(self, num : int) -> None:
         self.hp_max += num
-    
-    def draw_hp_line(self, screen : pygame.Surface):
-        if self.hp == self.hp_max:
-            return
-        line_width = self.rect.width - 20
-        line_height = 5
-        point_a = (self.rect.x + 10, self.rect.bottom - line_height)
-        point_b = (self.rect.x + 10 + line_width, self.rect.bottom - line_height)
-        line_color = (0, 0, 0)
-        now = pygame.time.get_ticks()
-
-        pygame.draw.line(screen, line_color, point_a, point_b, line_height)
-        remain = self.hp / self.hp_max
-        if remain > 0.3:
-            line_color = (0, 255, 0)
-        else:
-            line_color = (255, 0, 0)
-        point_c = (point_a[0] + int(line_width*remain), self.rect.bottom - line_height)
-        pygame.draw.line(screen, line_color, point_a, point_c, line_height)
         
     def be_hit(self, damage=1) -> None:
         self.hit = True
@@ -418,10 +398,15 @@ class MidEnemyPlane(pygame.sprite.Sprite):
 
 #大号敌机类
 class BigEnemyPlane(pygame.sprite.Sprite):
-    def __init__(self, group: pygame.sprite.Group, destroy_sound, speed = 2, hp_max = BIG_ENEMY_HP) -> None:
+    def __init__(self, group: pygame.sprite.Group, speed = BIG_ENEMY_SPEED, hp_max = BIG_ENEMY_HP) -> None:
         super().__init__(group)
         self.group = group
-        self.destroy_sound = destroy_sound
+        #炸毁音效
+        self.destroy_sound = pygame.mixer.Sound("sound/enemy3_down.wav")
+        self.destroy_sound.set_volume(0.2)
+        #进场音效
+        self.flying_sound = pygame.mixer.Sound("sound/enemy3_flying.wav")
+        self.flying_sound.set_volume(0.2)
         #加载飞行动画
         self.alive_frames = []
         for i in IMAGE_PATH['enemy_big']:
@@ -458,28 +443,11 @@ class BigEnemyPlane(pygame.sprite.Sprite):
         self.reset()
         self.hp_max = BIG_ENEMY_HP
         self.hp = self.hp_max
+        self.speed = BIG_ENEMY_SPEED
     
     def increase_difficulty(self, num : int) -> None:
         self.hp_max += num
 
-    def draw_hp_line(self, screen : pygame.Surface):
-        if self.hp == self.hp_max:
-            return
-        line_width = self.rect.width - 20
-        line_height = 5
-        point_a = (self.rect.x + 10, self.rect.bottom - line_height)
-        point_b = (self.rect.x + 10 + line_width, self.rect.bottom - line_height)
-        line_color = (0, 0, 0)
-
-        pygame.draw.line(screen, line_color, point_a, point_b, line_height)
-        remain = self.hp / self.hp_max
-        if remain > 0.3:
-            line_color = (0, 255, 0)
-        else:
-            line_color = (255, 0, 0)
-        point_c = (point_a[0] + int(line_width*remain), self.rect.bottom - line_height)
-        pygame.draw.line(screen, line_color, point_a, point_c, line_height)
-        
     def be_hit(self, damage=1) -> None:
         self.hit = True
         if self.hp <= 0:
@@ -521,7 +489,6 @@ class BigEnemyPlane(pygame.sprite.Sprite):
         #根据ticks计算frame_num
         now = pygame.time.get_ticks()
         delay = now - self.last_update_time
-        
         if self.is_alive:
             #存活状态
             self.move()
@@ -549,24 +516,29 @@ class BigEnemyPlane(pygame.sprite.Sprite):
 
 #子弹补给
 class BulletSupply(pygame.sprite.Sprite):
-    def __init__(self, group: pygame.sprite.Group, speed = 4) -> None:
+    def __init__(self, group: pygame.sprite.Group, speed = SUPPLY_SPEED) -> None:
         super().__init__()
         self.group = group
         self.image = pygame.image.load('images/bullet_supply.png').convert_alpha()
         self.rect = self.image.get_rect()
         self.mask = pygame.mask.from_surface(self.image)
         self.speed = speed
+        self.mix_channel = pygame.mixer.Channel(1)
+        #触发音效
+        self.upgrade_sound = pygame.mixer.Sound("sound/upgrade.wav")
+        self.upgrade_sound.set_volume(0.3)
         #获得音效
         self.get_bullet_sound = pygame.mixer.Sound("sound/get_bullet.wav")
-        self.get_bullet_sound.set_volume(0.2)
+        self.get_bullet_sound.set_volume(0.5)
     
     def start(self) -> None:
         self.rect.x = random.randint(0, SCREEN_WIDTH - self.rect.width)
         self.rect.y = -100
         self.add(self.group)
+        self.mix_channel.play(self.upgrade_sound)
     
     def get_supply(self) ->None:
-        self.get_bullet_sound.play()
+        self.mix_channel.play(self.get_bullet_sound)
         self.kill()
     
     def update(self) -> None:
@@ -578,39 +550,31 @@ class BulletSupply(pygame.sprite.Sprite):
 
 #核弹补给
 class BombSupply(pygame.sprite.Sprite):
-    def __init__(self, group: pygame.sprite.Group, speed = 4) -> None:
+    def __init__(self, group: pygame.sprite.Group, speed = SUPPLY_SPEED) -> None:
         super().__init__()
         self.group = group
         self.image = pygame.image.load('images/bomb_supply.png').convert_alpha()
         self.rect = self.image.get_rect()
         self.mask = pygame.mask.from_surface(self.image)
         self.speed = speed
+        self.mix_channel = pygame.mixer.Channel(1)
+        #触发音效
+        self.upgrade_sound = pygame.mixer.Sound("sound/upgrade.wav")
+        self.upgrade_sound.set_volume(0.3)
         #获得音效
         self.get_bullet_sound = pygame.mixer.Sound("sound/get_bomb.wav")
-        self.get_bullet_sound.set_volume(0.2)
-        self.use_bullet_sound = pygame.mixer.Sound("sound/use_bomb.wav")
-        self.use_bullet_sound.set_volume(0.2)
-        self.bomb_num = 0
-    
+        self.get_bullet_sound.set_volume(0.3)
+        
     def start(self) -> None:
         self.rect.x = random.randint(0, SCREEN_WIDTH - self.rect.width)
         self.rect.y = -100
         self.add(self.group)
+        self.mix_channel.play(self.upgrade_sound)
     
-    def get_supply(self) ->None:
-        if self.bomb_num < 100:
-            self.bomb_num += 1
-        self.get_bullet_sound.play()
+    def get_supply(self, bomb_ui) ->None:
+        self.mix_channel.play(self.get_bullet_sound)
+        bomb_ui.get_bomb()
         self.kill()
-    
-    def use_bomb(self, score_ui) -> None:
-        if self.bomb_num > 0:
-            self.use_bullet_sound.play()
-            self.bomb_num -= 1
-            for s in self.group:
-                if type(s) == BigEnemyPlane or type(s) == MidEnemyPlane or type(s) == SmallEnemyPlane:
-                    s.destroy()
-                    score_ui.add_score(s.hp_max)
     
     def update(self) -> None:
         if self.alive():
